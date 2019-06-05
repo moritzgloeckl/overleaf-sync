@@ -1,0 +1,18 @@
+[build-system]
+requires = ["flit"]
+build-backend = "flit.buildapi"
+
+[tool.flit.metadata]
+module = "olsync"
+dist-name = "overleaf-sync"
+description-file = "README.md"
+author = "Moritz Glöckl"
+author-email = "moritzgloeckl@users.noreply.github.com"
+home-page = "https://github.com/moritzgloeckl/overleaf-sync"
+classifiers = ["License :: OSI Approved :: MIT License", "Intended Audience :: Science/Research", "Programming Language :: Python :: 3"]
+requires-python = ">=3"
+requires = ["requests", "beautifulsoup4", "yaspin", "python-dateutil", "click"]
+keywords = "overleaf sync latex tex"
+
+[tool.flit.scripts]
+ols = "olsync.olsync:main"
