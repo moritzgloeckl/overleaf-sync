@@ -6,7 +6,7 @@
 # Description: Overleaf API Wrapper
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.0.0
+# Version: 1.0.2
 ##################################################
 
 import requests as reqs
@@ -49,8 +49,8 @@ class OverleafClient(object):
 
         # On a successful authentication the Overleaf API returns a new authenticated cookie.
         # If the cookie is different than the cookie of the GET request the authentication was successful
-        if post_login.status_code == 200 and get_login.cookies["overleaf_session"] != post_login.cookies[
-            "overleaf_session"]:
+        if post_login.status_code == 200 and get_login.cookies["overleaf_session2"] != post_login.cookies[
+            "overleaf_session2"]:
             self._cookie = post_login.cookies
             return {"cookie": self._cookie, "csrf": self._csrf}
 
