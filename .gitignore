@@ -105,3 +105,11 @@ venv.bak/
 
 #PyCharm
 .idea/
+
+# vscode
+.vscode
+
+# dev testing
+setup.py
+test*
+.olignore

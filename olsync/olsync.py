@@ -17,6 +17,8 @@ import pickle
 import zipfile
 import io
 import dateutil.parser
+import glob
+import fnmatch
 
 
 @click.group(invoke_without_command=True)
@@ -24,14 +26,17 @@ import dateutil.parser
 @click.option('-r', '--remote-only', 'remote', is_flag=True,
               help="Sync remote project files from Overleaf to local file system only.")
 @click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
-              help="Path to load the persisted Overleaf cookie.")
+              help="Relative path to load the persisted Overleaf cookie.")
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
+@click.option('--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
+              help="Relative path of the .olignore file (works when syncing from local to remote).")
 @click.pass_context
-def main(ctx, local, remote, cookie_path, sync_path):
+def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
-            raise click.ClickException("Persisted Overleaf cookie not found. Please login or check store path.")
+            raise click.ClickException(
+                "Persisted Overleaf cookie not found. Please login or check store path.")
 
         with open(cookie_path, 'rb') as f:
             store = pickle.load(f)
@@ -39,31 +44,33 @@ def main(ctx, local, remote, cookie_path, sync_path):
         overleaf_client = OverleafClient(store["cookie"], store["csrf"])
 
         project = execute_action(
-            lambda: overleaf_client.get_project(os.path.basename(os.path.join(sync_path, os.getcwd()))),
+            lambda: overleaf_client.get_project(
+                os.path.basename(os.path.join(sync_path, os.getcwd()))),
             "Querying project", "Project queried successfully.", "Project could not be queried.")
-        zip_file = execute_action(lambda: zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
-                                  , "Downloading project", "Project downloaded successfully.",
-                                  "Project could not be downloaded.")
+        zip_file = execute_action(lambda: zipfile.ZipFile(io.BytesIO
+                                                          (overleaf_client.download_project(project["id"]))), "Downloading project", "Project downloaded successfully.", "Project could not be downloaded.")
 
         sync = not (local or remote)
 
         if remote or sync:
             sync_func(zip_file.namelist(),
-                      lambda name: write_file(os.path.join(sync_path, name), zip_file.read(name)),
-                      lambda name: os.path.isfile(os.path.join(sync_path, name)),
-                      lambda name: open(os.path.join(sync_path, name), 'rb').read() == zip_file.read(name),
+                      lambda name: write_file(
+                          os.path.join(sync_path, name), zip_file.read(name)),
+                      lambda name: os.path.isfile(
+                          os.path.join(sync_path, name)),
+                      lambda name: open(os.path.join(
+                          sync_path, name), 'rb').read() == zip_file.read(name),
                       lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() > os.path.getmtime(
                           os.path.join(sync_path, name)),
                       "remote", "local")
         if local or sync:
             sync_func(
-                [f for f in os.listdir(sync_path) if
-                 os.path.isfile(os.path.join(sync_path, f)) and not f.startswith(".")],
-                lambda name: overleaf_client.upload_file(project["id"], name,
-                                                         os.path.getsize(os.path.join(sync_path, name)),
-                                                         open(os.path.join(sync_path, name), 'rb')),
+                olignore_keep_list(sync_path, olignore_path),
+                lambda name: overleaf_client.upload_file(project["id"], name, os.path.getsize(
+                    os.path.join(sync_path, name)), open(os.path.join(sync_path, name), 'rb')),
                 lambda name: name in zip_file.namelist(),
-                lambda name: open(os.path.join(sync_path, name), 'rb').read() == zip_file.read(name),
+                lambda name: open(os.path.join(sync_path, name),
+                                  'rb').read() == zip_file.read(name),
                 lambda name: os.path.getmtime(os.path.join(sync_path, name)) > dateutil.parser.isoparse(
                     project["lastUpdated"]).timestamp(),
                 "local", "remote")
@@ -78,7 +85,8 @@ def main(ctx, local, remote, cookie_path, sync_path):
               help="Path to store the persisted Overleaf cookie.")
 def login(username, password, cookie_path):
     if os.path.isfile(cookie_path) and not click.confirm(
-            'Persisted Overleaf cookie already exist. Do you want to override it?'): return
+            'Persisted Overleaf cookie already exist. Do you want to override it?'):
+        return
     click.clear()
     execute_action(lambda: login_handler(username, password, cookie_path), "Login",
                    "Login successful. Cookie persisted as `" + click.format_filename(
@@ -101,8 +109,7 @@ def write_file(path, content):
         f.write(content)
 
 
-def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name,
-              to_name):
+def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name, to_name):
     click.echo("\nSyncing files from %s to %s" % (from_name, to_name))
     click.echo("====================\n")
     for name in files_from:
@@ -113,13 +120,25 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
                         'Warning %s file will be overwritten by %s. Continue?' % (to_name, from_name)):
                     continue
 
-                click.echo("%s syncing from %s to %s." % (name, from_name, to_name))
+                click.echo("%s syncing from %s to %s." %
+                           (name, from_name, to_name))
                 create_file_at_to(name)
             else:
-                click.echo("%s file is equal to %s file. No sync necessary." % (name, to_name))
+                click.echo(
+                    "%s file is equal to %s file. No sync necessary." % (name, to_name))
         else:
-            click.echo("%s does not exist on %s. Creating file." % (name, to_name))
-            create_file_at_to(name)
+            click.echo("%s does not exist on %s. Creating file (directory)." %
+                       (name, to_name))
+
+            # deal with folders, _dir == name if `name` is directory
+            _dir = os.path.dirname(name)
+            if _dir and (not os.path.exists(_dir)):
+                # non-empty _dir
+                os.makedirs(_dir)
+
+            # `name` itself is not dir
+            if not os.path.isdir(name):
+                create_file_at_to(name)
 
         click.echo("")
 
@@ -143,6 +162,31 @@ def execute_action(action, progress_message, success_message, fail_message):
             spinner.fail("💥 ")
 
         return success
+
+
+def olignore_keep_list(sync_path, olignore_path):
+    """The list of files to keep synced, with support for subfolders.
+    """
+    # get list of files recursively (ignore .* files)
+    files = glob.glob('**', recursive=True)
+
+    # # remove item if it is a dir
+    # for f in files:
+    #     if os.path.isdir(f):
+    #         files.remove(f)
+    list(filter(lambda item: not os.path.isdir(item), files))
+
+    olignore_file = os.path.join(sync_path, olignore_path)
+    if not os.path.isfile(olignore_file):
+        return files
+    else:
+        with open(olignore_file, 'r') as f:
+            ignore_pattern = f.read().splitlines()
+
+        keep_list = [f for f in files if not any(
+            fnmatch.fnmatch(f, ignore) for ignore in ignore_pattern)]
+
+        return keep_list
 
 
 if __name__ == "__main__":
