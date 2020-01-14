@@ -1,4 +1,4 @@
-# Overleaf-Sync 1.0.2
+# Overleaf-Sync 1.0.3
 
 ### Easy Overleaf Two-Way Synchronization
 
@@ -31,7 +31,7 @@ That's it!
 - Execute the script from that folder (`test`)
 
 ### Usage
-#### Login 
+#### Login
 ```
 moritz@github:~/test$ ols login [-u/--username -p/--pasword --path]
 Username: <overleaf username>
@@ -43,10 +43,10 @@ You can either specify your username and/or password on the command line or you 
 
 ### Syncing
 ```
-moritz@github:~/test$ ols [-s/--sync -l/--local-only -r/--remote-only --store-path -p/--path]
+moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path --olignore]
 ```
 
-Just calling `ols` will two-way sync your project. When there are changes both locally and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from.
+Just calling `ols` will two-way sync your project. When there are changes both locally and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `--olignore` option allows you to specifify the path of `.olignore` file which works exactly like `.gitignore`.
 
 Sample Output:
 
@@ -71,6 +71,7 @@ other-report.tex does not exist on local. Creating file.
 
 ## Known Bugs
 - When modifying a file on Overleaf and immediately syncing afterwards, the tool might not detect the changes. Please allow 1-2 minutes after modifying a file on Overleaf before syncing it to your local computer.
+- When syncing from local to remote, files (including the ones in sub-directories) will all be synced to the root directory under Overleaf project (i.e., if local files under different folder share a same name, only the last synced file will be on Overleaf).
 
 ## Disclaimer
 THE AUTHOR OF THIS SOFTWARE AND THIS SOFTWARE IS NOT ENDORSED BY, DIRECTLY AFFILIATED WITH, MAINTAINED, AUTHORIZED, OR SPONSORED BY OVERLEAF OR WRITELATEX LIMITED. ALL PRODUCT AND COMPANY NAMES ARE THE REGISTERED TRADEMARKS OF THEIR ORIGINAL OWNERS. THE USE OF ANY TRADE NAME OR TRADEMARK IS FOR IDENTIFICATION AND REFERENCE PURPOSES ONLY AND DOES NOT IMPLY ANY ASSOCIATION WITH THE TRADEMARK HOLDER OF THEIR PRODUCT BRAND.
