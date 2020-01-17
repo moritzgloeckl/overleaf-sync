@@ -29,7 +29,7 @@ import fnmatch
               help="Relative path to load the persisted Overleaf cookie.")
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
-@click.option('--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
+@click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=True),
               help="Relative path of the .olignore file (works when syncing from local to remote).")
 @click.pass_context
 def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
@@ -47,8 +47,10 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
             lambda: overleaf_client.get_project(
                 os.path.basename(os.path.join(sync_path, os.getcwd()))),
             "Querying project", "Project queried successfully.", "Project could not be queried.")
-        zip_file = execute_action(lambda: zipfile.ZipFile(io.BytesIO
-                                                          (overleaf_client.download_project(project["id"]))), "Downloading project", "Project downloaded successfully.", "Project could not be downloaded.")
+        zip_file = execute_action(lambda: zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"]))),
+                                  "Downloading project",
+                                  "Project downloaded successfully.",
+                                  "Project could not be downloaded.")
 
         sync = not (local or remote)
 
@@ -136,8 +138,8 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
                 # non-empty _dir
                 os.makedirs(_dir)
 
-            # `name` itself is not dir
-            if not os.path.isdir(name):
+            # `name` itself is not a directory
+            if os.path.isfile(name):
                 create_file_at_to(name)
 
         click.echo("")

@@ -43,10 +43,10 @@ You can either specify your username and/or password on the command line or you 
 
 ### Syncing
 ```
-moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path --olignore]
+moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path -i/--olignore]
 ```
 
-Just calling `ols` will two-way sync your project. When there are changes both locally and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `--olignore` option allows you to specifify the path of `.olignore` file which works exactly like `.gitignore`.
+Just calling `ols` will two-way sync your project. When there are changes both locally and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `-i/--olignore` option allows you to specify the path of `.olignore` file which works exactly like `.gitignore`.
 
 Sample Output:
 
