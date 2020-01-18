@@ -115,49 +115,69 @@ def login_handler(username, password, path):
 
 
 def write_file(path, content):
+    _dir = os.path.dirname(path)
+    if _dir == path:
+        return
+
+    # path is a file
+    if (not os.path.exists(_dir)):
+        os.makedirs(_dir)
+
     with open(path, 'wb+') as f:
         f.write(content)
 
 
 def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name, to_name):
-    click.echo("\nSyncing files from %s to %s" % (from_name, to_name))
-    click.echo("====================\n")
+    click.echo("\nSyncing files from [%s] to [%s]" % (from_name, to_name))
+    click.echo('='*40)
+
+    newly_add_list = []
+    update_list = []
+    not_sync_list = []
+    synced_list = []
+
     for name in files_from:
-        click.echo("[SYNCING] %s" % name)
         if from_exists_in_to(name):
             if not from_equal_to_to(name):
                 if not from_newer_than_to(name) and not click.confirm(
-                        'Warning %s file will be overwritten by %s. Continue?' % (to_name, from_name)):
+                        '\n-> Warning: last-edit time stamp of file <%s> from [%s] is older than [%s].\nContinue to overwrite with an older version?' % (name, from_name, to_name)):
+                    not_sync_list.append(name)
                     continue
 
-                click.echo("%s syncing from %s to %s." %
-                           (name, from_name, to_name))
-                create_file_at_to(name)
+                update_list.append(name)
             else:
-                click.echo(
-                    "%s file is equal to %s file. No sync necessary." % (name, to_name))
+                synced_list.append(name)
         else:
-            click.echo("%s does not exist on %s. Creating file (directory)." %
-                       (name, to_name))
+            newly_add_list.append(name)
 
-            if os.path.isfile(name):
-                create_file_at_to(name)
-            else:
-                # deal with folders, _dir == name if `name` is directory
-                _dir = os.path.dirname(name)
-                if _dir and 'local' == to_name:
-                    # remote to local
-                    if not os.path.exists(_dir):
-                        # non-empty _dir in `from`
-                        os.makedirs(_dir)
-                elif _dir and 'remote' == to_name:
-                    # TODO deal with folders in remote
-                    pass
+    # remove all folders
+    newly_add_list = [
+        item for item in newly_add_list if not os.path.isdir(item)]
 
-        click.echo("")
+    click.echo(
+        "\n[NEW] Following new file(s) created on [%s]" % to_name)
+    for name in newly_add_list:
+        click.echo("\t%s" % name)
+        create_file_at_to(name)
+
+    click.echo(
+        "\n[UPDATE] Following file(s) updated on [%s]" % to_name)
+    for name in update_list:
+        click.echo("\t%s" % name)
+        create_file_at_to(name)
+
+    click.echo(
+        "\n[SYNC] Following file(s) being of latest version")
+    for name in synced_list:
+        click.echo("\t%s" % name)
+
+    click.echo(
+        "\n[SKIP] Following file(s) version on [%s] fall behind of [%s], but skipped as per your request" % (from_name, to_name))
+    for name in not_sync_list:
+        click.echo("\t%s" % name)
 
     click.echo("")
-    click.echo("✅  Synced files from %s to %s" % (from_name, to_name))
+    click.echo("✅  Synced files from [%s] to [%s]" % (from_name, to_name))
     click.echo("")
 
 
@@ -186,21 +206,15 @@ def olignore_keep_list(sync_path, olignore_path):
     # get list of files recursively (ignore .* files)
     files = glob.glob('**', recursive=True)
 
-    # # remove item if it is a dir
-    # for f in files:
-    #     if os.path.isdir(f):
-    #         files.remove(f)
-    list(filter(lambda item: not os.path.isdir(item), files))
-
     olignore_file = os.path.join(sync_path, olignore_path)
     click.echo("="*40)
     if not os.path.isfile(olignore_file):
-        if not click.confirm('\nNotice: olignore file not exist, will sync all items, continue?'):
+        if not click.confirm('\nNotice: olignore file not exist, will sync all items. Continue?'):
             click.echo("\nNo file will be synced.")
             return []
         else:
             click.echo("syncing all items")
-            return files
+            keep_list = files
     else:
         click.echo("\nolignore: using %s to filter items" % olignore_file)
         with open(olignore_file, 'r') as f:
@@ -209,7 +223,8 @@ def olignore_keep_list(sync_path, olignore_path):
         keep_list = [f for f in files if not any(
             fnmatch.fnmatch(f, ignore) for ignore in ignore_pattern)]
 
-        return keep_list
+    keep_list = [item for item in keep_list if not os.path.isdir(item)]
+    return keep_list
 
 
 if __name__ == "__main__":
