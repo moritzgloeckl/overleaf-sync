@@ -30,7 +30,7 @@ import fnmatch
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
-              help="Relative path of the .olignore file (works when syncing from local to remote).")
+              help="Relative path of the .olignore file (ignored if sync from remote to local).")
 @click.pass_context
 def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
     if ctx.invoked_subcommand is None:
@@ -46,7 +46,9 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
         project = execute_action(
             lambda: overleaf_client.get_project(
                 os.path.basename(os.path.join(sync_path, os.getcwd()))),
-            "Querying project", "Project queried successfully.", "Project could not be queried.")
+            "Querying project",
+            "Project queried successfully.",
+            "Project could not be queried.")
         zip_file = execute_action(
             lambda: zipfile.ZipFile(io.BytesIO(
                 overleaf_client.download_project(project["id"]))),
@@ -138,20 +140,24 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
             click.echo("%s does not exist on %s. Creating file (directory)." %
                        (name, to_name))
 
-            # deal with folders, _dir == name if `name` is directory
-            _dir = os.path.dirname(name)
-            if _dir and (not os.path.exists(_dir)):
-                # non-empty _dir
-                os.makedirs(_dir)
-
-            # `name` itself is not a directory
             if os.path.isfile(name):
                 create_file_at_to(name)
+            else:
+                # deal with folders, _dir == name if `name` is directory
+                _dir = os.path.dirname(name)
+                if _dir and 'local' == to_name:
+                    # remote to local
+                    if not os.path.exists(_dir):
+                        # non-empty _dir in `from`
+                        os.makedirs(_dir)
+                elif _dir and 'remote' == to_name:
+                    # TODO deal with folders in remote
+                    pass
 
         click.echo("")
 
     click.echo("")
-    click.echo("✅  Syncing files from %s to %s" % (from_name, to_name))
+    click.echo("✅  Synced files from %s to %s" % (from_name, to_name))
     click.echo("")
 
 
@@ -174,6 +180,8 @@ def execute_action(action, progress_message, success_message, fail_message):
 
 def olignore_keep_list(sync_path, olignore_path):
     """The list of files to keep synced, with support for subfolders.
+
+    Should only be called when sync from local to remote.
     """
     # get list of files recursively (ignore .* files)
     files = glob.glob('**', recursive=True)
@@ -185,9 +193,16 @@ def olignore_keep_list(sync_path, olignore_path):
     list(filter(lambda item: not os.path.isdir(item), files))
 
     olignore_file = os.path.join(sync_path, olignore_path)
+    click.echo("="*40)
     if not os.path.isfile(olignore_file):
-        return files
+        if not click.confirm('\nNotice: olignore file not exist, will sync all items, continue?'):
+            click.echo("\nNo file will be synced.")
+            return []
+        else:
+            click.echo("syncing all items")
+            return files
     else:
+        click.echo("\nolignore: using %s to filter items" % olignore_file)
         with open(olignore_file, 'r') as f:
             ignore_pattern = f.read().splitlines()
 

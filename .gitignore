@@ -108,6 +108,7 @@ venv.bak/
 
 # vscode
 .vscode
+.DS_Store
 
 # dev testing
 setup.py
