@@ -29,7 +29,7 @@ import fnmatch
               help="Relative path to load the persisted Overleaf cookie.")
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
-@click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=True),
+@click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Relative path of the .olignore file (works when syncing from local to remote).")
 @click.pass_context
 def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
@@ -47,35 +47,41 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
             lambda: overleaf_client.get_project(
                 os.path.basename(os.path.join(sync_path, os.getcwd()))),
             "Querying project", "Project queried successfully.", "Project could not be queried.")
-        zip_file = execute_action(lambda: zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"]))),
-                                  "Downloading project",
-                                  "Project downloaded successfully.",
-                                  "Project could not be downloaded.")
+        zip_file = execute_action(
+            lambda: zipfile.ZipFile(io.BytesIO(
+                overleaf_client.download_project(project["id"]))),
+            "Downloading project",
+            "Project downloaded successfully.",
+            "Project could not be downloaded.")
 
         sync = not (local or remote)
 
         if remote or sync:
-            sync_func(zip_file.namelist(),
-                      lambda name: write_file(
-                          os.path.join(sync_path, name), zip_file.read(name)),
-                      lambda name: os.path.isfile(
-                          os.path.join(sync_path, name)),
-                      lambda name: open(os.path.join(
-                          sync_path, name), 'rb').read() == zip_file.read(name),
-                      lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() > os.path.getmtime(
-                          os.path.join(sync_path, name)),
-                      "remote", "local")
+            sync_func(
+                files_from=zip_file.namelist(),
+                create_file_at_to=lambda name: write_file(
+                    os.path.join(sync_path, name), zip_file.read(name)),
+                from_exists_in_to=lambda name: os.path.isfile(
+                    os.path.join(sync_path, name)),
+                from_equal_to_to=lambda name: open(os.path.join(
+                    sync_path, name), 'rb').read() == zip_file.read(name),
+                from_newer_than_to=lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() > os.path.getmtime(
+                    os.path.join(sync_path, name)),
+                from_name="remote",
+                to_name="local")
         if local or sync:
             sync_func(
-                olignore_keep_list(sync_path, olignore_path),
-                lambda name: overleaf_client.upload_file(project["id"], name, os.path.getsize(
-                    os.path.join(sync_path, name)), open(os.path.join(sync_path, name), 'rb')),
-                lambda name: name in zip_file.namelist(),
-                lambda name: open(os.path.join(sync_path, name),
-                                  'rb').read() == zip_file.read(name),
-                lambda name: os.path.getmtime(os.path.join(sync_path, name)) > dateutil.parser.isoparse(
+                files_from=olignore_keep_list(sync_path, olignore_path),
+                create_file_at_to=lambda name: overleaf_client.upload_file(
+                    project["id"], name, os.path.getsize(
+                        os.path.join(sync_path, name)), open(os.path.join(sync_path, name), 'rb')),
+                from_exists_in_to=lambda name: name in zip_file.namelist(),
+                from_equal_to_to=lambda name: open(os.path.join(sync_path, name),
+                                                   'rb').read() == zip_file.read(name),
+                from_newer_than_to=lambda name: os.path.getmtime(os.path.join(sync_path, name)) > dateutil.parser.isoparse(
                     project["lastUpdated"]).timestamp(),
-                "local", "remote")
+                from_name="local",
+                to_name="remote")
 
 
 @main.command()
