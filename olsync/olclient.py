@@ -14,9 +14,11 @@ from bs4 import BeautifulSoup
 import json
 import uuid
 
-LOGIN_URL = "https://www.overleaf.com/login"  # Where to get the CSRF Token and where to send the login request to
+# Where to get the CSRF Token and where to send the login request to
+LOGIN_URL = "https://www.overleaf.com/login"
 PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
-DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"  # The URL to download all the files in zip format
+# The URL to download all the files in zip format
+DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
 UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
 
 
@@ -39,18 +41,20 @@ class OverleafClient(object):
         """
 
         get_login = reqs.get(LOGIN_URL)
-        self._csrf = BeautifulSoup(get_login.content, 'html.parser').find('input', {'name': '_csrf'}).get('value')
+        self._csrf = BeautifulSoup(get_login.content, 'html.parser').find(
+            'input', {'name': '_csrf'}).get('value')
         login_json = {
             "_csrf": self._csrf,
             "email": username,
             "password": password
         }
-        post_login = reqs.post(LOGIN_URL, json=login_json, cookies=get_login.cookies)
+        post_login = reqs.post(LOGIN_URL, json=login_json,
+                               cookies=get_login.cookies)
 
         # On a successful authentication the Overleaf API returns a new authenticated cookie.
         # If the cookie is different than the cookie of the GET request the authentication was successful
         if post_login.status_code == 200 and get_login.cookies["overleaf_session2"] != post_login.cookies[
-            "overleaf_session2"]:
+                "overleaf_session2"]:
             self._cookie = post_login.cookies
             return {"cookie": self._cookie, "csrf": self._csrf}
 
@@ -74,7 +78,8 @@ class OverleafClient(object):
         json_content = json.loads(
             BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
         return next(
-            filter(lambda x: not x.get("archived") and x.get("name") == project_name, json_content.get("projects")),
+            filter(lambda x: not x.get("archived") and x.get("name")
+                   == project_name, json_content.get("projects")),
             None)
 
     def download_project(self, project_id):
@@ -83,14 +88,20 @@ class OverleafClient(object):
         Params: project_id, the id of the project
         Returns: bytes string (zip file)
         """
-        r = reqs.get(DOWNLOAD_URL.format(project_id), stream=True, cookies=self._cookie)
+        r = reqs.get(DOWNLOAD_URL.format(project_id),
+                     stream=True, cookies=self._cookie)
         return r.content
 
     def upload_file(self, project_id, file_name, file_size, file):
         """
         Upload a file to the project
-        Params: project_id, the id of the project, file_name, how the file will be named, file_size, the size of the
-                file in bytes, file, the file itself
+
+        Params:
+        project_id: the id of the project
+        file_name: how the file will be named
+        file_size: the size of the file in bytes
+        file: the file itself
+
         Returns: True on success, False on fail
         """
 
@@ -105,5 +116,6 @@ class OverleafClient(object):
         files = {
             "qqfile": file
         }
-        r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
-        return r.status_code == 200 and json.loads(r.content)["success"]
+        r = reqs.post(UPLOAD_URL.format(project_id),
+                      cookies=self._cookie, params=params, files=files)
+        return r.status_code == str(200) and json.loads(r.content)["success"]
