@@ -3,3 +3,4 @@ beautifulsoup4
 yaspin
 python-dateutil
 click
+socketIO-client == 0.5.7.2

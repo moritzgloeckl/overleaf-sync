@@ -12,13 +12,19 @@
 import click
 import os
 from yaspin import yaspin
-from olsync.olclient import OverleafClient
 import pickle
 import zipfile
 import io
 import dateutil.parser
 import glob
 import fnmatch
+
+try:
+    # Import for pip installation / wheel
+    from olsync.olclient import OverleafClient
+except ImportError:
+    # Import for development
+    from olclient import OverleafClient
 
 
 @click.group(invoke_without_command=True)
@@ -31,6 +37,7 @@ import fnmatch
               help="Path of the project to sync.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Relative path of the .olignore file (ignored if sync from remote to local).")
+@click.version_option()
 @click.pass_context
 def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
     if ctx.invoked_subcommand is None:
@@ -49,6 +56,13 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
             "Querying project",
             "Project queried successfully.",
             "Project could not be queried.")
+
+        project_infos = execute_action(
+            lambda: overleaf_client.get_project_infos(project["id"]),
+            "Querying project details",
+            "Project details queried successfully.",
+            "Project details could not be queried.")
+
         zip_file = execute_action(
             lambda: zipfile.ZipFile(io.BytesIO(
                 overleaf_client.download_project(project["id"]))),
@@ -75,7 +89,7 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
             sync_func(
                 files_from=olignore_keep_list(sync_path, olignore_path),
                 create_file_at_to=lambda name: overleaf_client.upload_file(
-                    project["id"], name, os.path.getsize(
+                    project["id"], project_infos, name, os.path.getsize(
                         os.path.join(sync_path, name)), open(os.path.join(sync_path, name), 'rb')),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
                 from_equal_to_to=lambda name: open(os.path.join(sync_path, name),
@@ -120,7 +134,7 @@ def write_file(path, content):
         return
 
     # path is a file
-    if (not os.path.exists(_dir)):
+    if not os.path.exists(_dir):
         os.makedirs(_dir)
 
     with open(path, 'wb+') as f:
@@ -140,7 +154,8 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
         if from_exists_in_to(name):
             if not from_equal_to_to(name):
                 if not from_newer_than_to(name) and not click.confirm(
-                        '\n-> Warning: last-edit time stamp of file <%s> from [%s] is older than [%s].\nContinue to overwrite with an older version?' % (name, from_name, to_name)):
+                        '\n-> Warning: last-edit time stamp of file <%s> from [%s] is older than [%s].\nContinue to '
+                        'overwrite with an older version?' % (name, from_name, to_name)):
                     not_sync_list.append(name)
                     continue
 
@@ -149,10 +164,6 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
                 synced_list.append(name)
         else:
             newly_add_list.append(name)
-
-    # remove all folders
-    newly_add_list = [
-        item for item in newly_add_list if not os.path.isdir(item)]
 
     click.echo(
         "\n[NEW] Following new file(s) created on [%s]" % to_name)
@@ -167,12 +178,12 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
         create_file_at_to(name)
 
     click.echo(
-        "\n[SYNC] Following file(s) being of latest version")
+        "\n[SYNC] Following file(s) are up to date")
     for name in synced_list:
         click.echo("\t%s" % name)
 
     click.echo(
-        "\n[SKIP] Following file(s) version on [%s] fall behind of [%s], but skipped as per your request" % (from_name, to_name))
+        "\n[SKIP] Following file(s) on [%s] have not been synced to [%s]" % (from_name, to_name))
     for name in not_sync_list:
         click.echo("\t%s" % name)
 
@@ -199,9 +210,9 @@ def execute_action(action, progress_message, success_message, fail_message):
 
 
 def olignore_keep_list(sync_path, olignore_path):
-    """The list of files to keep synced, with support for subfolders.
-
-    Should only be called when sync from local to remote.
+    """
+    The list of files to keep synced, with support for sub-folders.
+    Should only be called when syncing from local to remote.
     """
     # get list of files recursively (ignore .* files)
     files = glob.glob('**', recursive=True)
@@ -209,14 +220,10 @@ def olignore_keep_list(sync_path, olignore_path):
     olignore_file = os.path.join(sync_path, olignore_path)
     click.echo("="*40)
     if not os.path.isfile(olignore_file):
-        if not click.confirm('\nNotice: olignore file not exist, will sync all items. Continue?'):
-            click.echo("\nNo file will be synced.")
-            return []
-        else:
-            click.echo("syncing all items")
-            keep_list = files
+        click.echo("\nNotice: .olignore file does not exist, will sync all items.")
+        keep_list = files
     else:
-        click.echo("\nolignore: using %s to filter items" % olignore_file)
+        click.echo("\n.olignore: using %s to filter items" % olignore_file)
         with open(olignore_file, 'r') as f:
             ignore_pattern = f.read().splitlines()
 
