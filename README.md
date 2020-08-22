@@ -1,4 +1,4 @@
-# Overleaf-Sync 1.0.3
+# Overleaf-Sync 1.1.0
 
 ### Easy Overleaf Two-Way Synchronization
 
