@@ -26,7 +26,6 @@ except ImportError:
     # Import for development
     from olclient import OverleafClient
 
-
 @click.group(invoke_without_command=True)
 @click.option('-l', '--local-only', 'local', is_flag=True, help="Sync local project files to Overleaf only.")
 @click.option('-r', '--remote-only', 'remote', is_flag=True,
@@ -35,11 +34,13 @@ except ImportError:
               help="Relative path to load the persisted Overleaf cookie.")
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
+@click.option('-n', '--name', 'ol_name', default=lambda: os.path.basename(os.getcwd()), type=click.STRING,
+              help="Name of the project on Overleaf.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Relative path of the .olignore file (ignored if sync from remote to local).")
 @click.version_option()
 @click.pass_context
-def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
+def main(ctx, local, remote, cookie_path, sync_path, ol_name, olignore_path):
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
             raise click.ClickException(
@@ -51,8 +52,7 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
         overleaf_client = OverleafClient(store["cookie"], store["csrf"])
 
         project = execute_action(
-            lambda: overleaf_client.get_project(
-                os.path.basename(os.path.join(sync_path, os.getcwd()))),
+            lambda: overleaf_client.get_project(ol_name),
             "Querying project",
             "Project queried successfully.",
             "Project could not be queried.")
