@@ -34,25 +34,26 @@ except ImportError:
               help="Relative path to load the persisted Overleaf cookie.")
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
-@click.option('-n', '--name', 'ol_name', default=lambda: os.path.basename(os.getcwd()), type=click.STRING,
+@click.option('-n', '--name', 'project_name', 
               help="Name of the project on Overleaf.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Relative path of the .olignore file (ignored if sync from remote to local).")
 @click.version_option()
 @click.pass_context
-def main(ctx, local, remote, cookie_path, sync_path, ol_name, olignore_path):
+def main(ctx, local, remote, cookie_path, sync_path, project_name, olignore_path):
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
             raise click.ClickException(
                 "Persisted Overleaf cookie not found. Please login or check store path.")
-
+        
         with open(cookie_path, 'rb') as f:
             store = pickle.load(f)
 
-        overleaf_client = OverleafClient(store["cookie"], store["csrf"])
-
+        overleaf_client = OverleafClient(store["cookie"], store["csrf"]) 
+        
         project = execute_action(
-            lambda: overleaf_client.get_project(ol_name),
+            lambda: overleaf_client.get_project(
+                project_name if project_name else os.path.basename(sync_path)),
             "Querying project",
             "Project queried successfully.",
             "Project could not be queried.")
