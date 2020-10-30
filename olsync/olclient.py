@@ -57,12 +57,13 @@ class OverleafClient(object):
 
         # On a successful authentication the Overleaf API returns a new authenticated cookie.
         # If the cookie is different than the cookie of the GET request the authentication was successful
-        if post_login.status_code == 200 and get_login.cookies["overleaf_session2"] != post_login.cookies[
-            "overleaf_session2"]:
+        if post_login.status_code == 200 and get_login.cookies["sharelatex.sid"] != post_login.cookies[
+            "sharelatex.sid"]:
+
             self._cookie = post_login.cookies
 
             # Enrich cookie with gke-route cookie from GET request above
-            self._cookie['gke-route'] = get_login.cookies['gke-route']
+            #self._cookie['gke-route'] = get_login.cookies['gke-route']
 
             return {"cookie": self._cookie, "csrf": self._csrf}
 
@@ -144,10 +145,9 @@ class OverleafClient(object):
             project_infos = project_infos_dict
 
         # Convert cookie from CookieJar to string
-        cookie = "gke-route={}; overleaf_session2={}" \
+        cookie = "sharelatex.sid={}" \
             .format(
-                reqs.utils.dict_from_cookiejar(self._cookie)["gke-route"],
-                reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
+                reqs.utils.dict_from_cookiejar(self._cookie)["sharelatex.sid"]
             )
 
         # Connect to Overleaf Socket.IO, send a time parameter and the cookies
