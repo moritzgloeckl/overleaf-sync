@@ -48,7 +48,21 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
         with open(cookie_path, 'rb') as f:
             store = pickle.load(f)
 
-        overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+        #Read .olce file for URL to local installation of Overleaf/Sharelatex
+        olce_file = os.path.join(sync_path, ".olce")
+        click.echo("=" * 40)
+        ce_url = None
+        if not os.path.isfile(olce_file):
+            click.echo("\nNotice: .olce file does not exist, will sync with overleaf.com.")
+        else:
+
+            with open(olce_file, 'r') as f:
+                ce_url = f.readline()
+                f.close()
+
+            click.echo("\n.olce: using %s as CE server" % ce_url)
+
+        overleaf_client = OverleafClient(store["cookie"], store["csrf"], ce_url)
 
         project = execute_action(
             lambda: overleaf_client.get_project(

@@ -16,26 +16,31 @@ import uuid
 from socketIO_client import SocketIO
 import time
 
-# Where to get the CSRF Token and where to send the login request to
-LOGIN_URL = "https://www.overleaf.com/login"
-PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
-# The URL to download all the files in zip format
-DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
-UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
-FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
-BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
-
-
 class OverleafClient(object):
     """
     Overleaf API Wrapper
     Supports login, querying all projects, querying a specific project, downloading a project and
     uploading a file to a project.
     """
+    _ce = False
 
-    def __init__(self, cookie=None, csrf=None):
+    def __init__(self, cookie=None, csrf=None, ce_url=None):
         self._cookie = cookie  # Store the cookie for authenticated requests
         self._csrf = csrf  # Store the CSRF token since it is needed for some requests
+
+        # Where to get the CSRF Token and where to send the login request to
+        if ce_url != None:
+            self._ce = True
+            self._BASE_URL = ce_url
+        else:
+            self._BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
+
+        self._LOGIN_URL = self._BASE_URL + "/login"
+        self._PROJECT_URL = self._BASE_URL + "/project"  # The dashboard URL
+        # The URL to download all the files in zip format
+        self._DOWNLOAD_URL = self._BASE_URL + "/project/{}/download/zip"
+        self._UPLOAD_URL = self._BASE_URL + "/project/{}/upload"  # The URL to upload files
+        self._FOLDER_URL = self._BASE_URL + "/project/{}/folder"  # The URL to create folders
 
     def login(self, username, password):
         """
@@ -44,7 +49,7 @@ class OverleafClient(object):
         Returns: Dict of cookie and CSRF
         """
 
-        get_login = reqs.get(LOGIN_URL)
+        get_login = reqs.get(self._LOGIN_URL)
         self._csrf = BeautifulSoup(get_login.content, 'html.parser').find(
             'input', {'name': '_csrf'}).get('value')
         login_json = {
@@ -52,18 +57,20 @@ class OverleafClient(object):
             "email": username,
             "password": password
         }
-        post_login = reqs.post(LOGIN_URL, json=login_json,
+        post_login = reqs.post(self._LOGIN_URL, json=login_json,
                                cookies=get_login.cookies)
 
         # On a successful authentication the Overleaf API returns a new authenticated cookie.
         # If the cookie is different than the cookie of the GET request the authentication was successful
-        if post_login.status_code == 200 and get_login.cookies["sharelatex.sid"] != post_login.cookies[
-            "sharelatex.sid"]:
+        if post_login.status_code == 200 and ((self._ce and get_login.cookies["sharelatex.sid"] != post_login.cookies[
+            "sharelatex.sid"]) or get_login.cookies["overleaf_session2"] != post_login.cookies[
+            "overleaf_session2"]):
 
             self._cookie = post_login.cookies
 
-            # Enrich cookie with gke-route cookie from GET request above
-            #self._cookie['gke-route'] = get_login.cookies['gke-route']
+            if not self._ce:
+                # Enrich cookie with gke-route cookie from GET request above
+                self._cookie['gke-route'] = get_login.cookies['gke-route']
 
             return {"cookie": self._cookie, "csrf": self._csrf}
 
@@ -72,7 +79,7 @@ class OverleafClient(object):
         Get all of a user's active projects (= not archived)
         Returns: List of project objects
         """
-        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+        projects_page = reqs.get(self._PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
             BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
         return list(filter(lambda x: not x.get("archived"), json_content.get("projects")))
@@ -84,7 +91,7 @@ class OverleafClient(object):
         Returns: project object
         """
 
-        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+        projects_page = reqs.get(self._PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
             BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
         return next(
@@ -97,7 +104,7 @@ class OverleafClient(object):
         Params: project_id, the id of the project
         Returns: bytes string (zip file)
         """
-        r = reqs.get(DOWNLOAD_URL.format(project_id),
+        r = reqs.get(self._DOWNLOAD_URL.format(project_id),
                      stream=True, cookies=self._cookie)
         return r.content
 
@@ -118,7 +125,7 @@ class OverleafClient(object):
             "_csrf": self._csrf,
             "name": folder_name
         }
-        r = reqs.post(FOLDER_URL.format(project_id),
+        r = reqs.post(self._FOLDER_URL.format(project_id),
                       cookies=self._cookie, json=params)
 
         if r.ok:
@@ -145,14 +152,22 @@ class OverleafClient(object):
             project_infos = project_infos_dict
 
         # Convert cookie from CookieJar to string
-        cookie = "sharelatex.sid={}" \
-            .format(
-                reqs.utils.dict_from_cookiejar(self._cookie)["sharelatex.sid"]
-            )
+        cookie = None
+        if self._ce:
+            cookie = "sharelatex.sid={}" \
+                .format(
+                    reqs.utils.dict_from_cookiejar(self._cookie)["sharelatex.sid"]
+                )
+        else:
+            cookie = "gke-route={}; overleaf_session2={}" \
+                .format(
+                    reqs.utils.dict_from_cookiejar(self._cookie)["gke-route"],
+                    reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
+                )
 
         # Connect to Overleaf Socket.IO, send a time parameter and the cookies
         socket_io = SocketIO(
-            BASE_URL,
+            self._BASE_URL,
             params={'t': int(time.time())},
             headers={'Cookie': cookie}
         )
@@ -217,6 +232,6 @@ class OverleafClient(object):
         }
 
         # Upload the file to the predefined folder
-        r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
+        r = reqs.post(self._UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
 
         return r.status_code == str(200) and json.loads(r.content)["success"]
