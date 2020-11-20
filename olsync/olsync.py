@@ -48,7 +48,9 @@ def main(ctx, local, remote, cookie_path, sync_path, olignore_path):
         with open(cookie_path, 'rb') as f:
             store = pickle.load(f)
 
-        overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+        ce_url = olceChecker(sync_path)
+
+        overleaf_client = OverleafClient(store["cookie"], store["csrf"], ce_url)
 
         project = execute_action(
             lambda: overleaf_client.get_project(
@@ -119,7 +121,7 @@ def login(username, password, cookie_path):
 
 
 def login_handler(username, password, path):
-    overleaf_client = OverleafClient()
+    overleaf_client = OverleafClient(None, None, olceChecker())
     store = overleaf_client.login(username, password)
     if store is None:
         return False
@@ -233,6 +235,24 @@ def olignore_keep_list(sync_path, olignore_path):
     keep_list = [item for item in keep_list if not os.path.isdir(item)]
     return keep_list
 
+def olceChecker(sync_path = ""):
+
+    # Read .olce file for URL to local installation of Overleaf/Sharelatex
+    olce_file = os.path.join(sync_path, ".olce")
+
+    click.echo("=" * 40)
+    ce_url = None
+    if not os.path.isfile(olce_file):
+        click.echo("\nNotice: .olce file does not exist, will sync with overleaf.com.")
+    else:
+
+        with open(olce_file, 'r') as f:
+            ce_url = f.readline()
+            f.close()
+
+        click.echo("\n.olce: using %s as CE server" % ce_url)
+
+    return ce_url
 
 if __name__ == "__main__":
     main()
