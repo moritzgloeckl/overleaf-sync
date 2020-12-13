@@ -6,7 +6,7 @@
 # Description: Overleaf API Wrapper
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.1
+# Version: 1.1.2
 ##################################################
 
 import requests as reqs
@@ -32,6 +32,14 @@ class OverleafClient(object):
     Supports login, querying all projects, querying a specific project, downloading a project and
     uploading a file to a project.
     """
+
+    @staticmethod
+    def filter_projects(json_content, more_attrs=None):
+        more_attrs = more_attrs or {}
+        for p in json_content.get("projects", []):
+            if not p.get("archived") and not p.get("trashed"):
+                if all(p.get(k) == v for k, v in more_attrs.items()):
+                    yield p
 
     def __init__(self, cookie=None, csrf=None):
         self._cookie = cookie  # Store the cookie for authenticated requests
@@ -68,13 +76,13 @@ class OverleafClient(object):
 
     def all_projects(self):
         """
-        Get all of a user's active projects (= not archived)
+        Get all of a user's active projects (= not archived and not trashed)
         Returns: List of project objects
         """
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
             BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
-        return list(filter(lambda x: not x.get("archived"), json_content.get("projects")))
+        return list(OverleafClient.filter_projects(json_content))
 
     def get_project(self, project_name):
         """
@@ -86,9 +94,7 @@ class OverleafClient(object):
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
             BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
-        return next(
-            filter(lambda x: not x.get("archived") and x.get("name") == project_name, json_content.get("projects")),
-            None)
+        return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
     def download_project(self, project_id):
         """
