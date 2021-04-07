@@ -36,7 +36,7 @@ class OverleafClient(object):
     @staticmethod
     def filter_projects(json_content, more_attrs=None):
         more_attrs = more_attrs or {}
-        for p in json_content.get("projects", []):
+        for p in json_content:
             if not p.get("archived") and not p.get("trashed"):
                 if all(p.get(k) == v for k, v in more_attrs.items()):
                     yield p
@@ -81,7 +81,7 @@ class OverleafClient(object):
         """
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
+            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
         return list(OverleafClient.filter_projects(json_content))
 
     def get_project(self, project_name):
@@ -93,7 +93,7 @@ class OverleafClient(object):
 
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('script', {'id': 'data'}).contents[0])
+            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
         return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
     def download_project(self, project_id):
