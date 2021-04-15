@@ -18,6 +18,7 @@ import io
 import dateutil.parser
 import glob
 import fnmatch
+import traceback
 
 try:
     # Import for pip installation / wheel
@@ -39,9 +40,10 @@ except ImportError:
               help="Path of the project to sync.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local).")
+@click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
 @click.version_option()
 @click.pass_context
-def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path):
+def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, verbose):
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
             raise click.ClickException(
@@ -60,20 +62,23 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
             lambda: overleaf_client.get_project(project_name),
             "Querying project",
             "Project queried successfully.",
-            "Project could not be queried.")
+            "Project could not be queried.",
+            verbose)
 
         project_infos = execute_action(
             lambda: overleaf_client.get_project_infos(project["id"]),
             "Querying project details",
             "Project details queried successfully.",
-            "Project details could not be queried.")
+            "Project details could not be queried.",
+            verbose)
 
         zip_file = execute_action(
             lambda: zipfile.ZipFile(io.BytesIO(
                 overleaf_client.download_project(project["id"]))),
             "Downloading project",
             "Project downloaded successfully.",
-            "Project could not be downloaded.")
+            "Project could not be downloaded.",
+            verbose)
 
         sync = not (local or remote)
 
@@ -86,7 +91,8 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
                 from_newer_than_to=lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() >
                                                 os.path.getmtime(name),
                 from_name="remote",
-                to_name="local")
+                to_name="local",
+                verbose=verbose)
         if local or sync:
             sync_func(
                 files_from=olignore_keep_list(olignore_path),
@@ -97,7 +103,8 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
                 from_newer_than_to=lambda name: os.path.getmtime(name) > dateutil.parser.isoparse(
                     project["lastUpdated"]).timestamp(),
                 from_name="local",
-                to_name="remote")
+                to_name="remote",
+                verbose=verbose)
 
 
 @main.command()
@@ -107,7 +114,8 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
               help="You Overleaf password. Will NOT be stored or used for anything else.")
 @click.option('--path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Path to store the persisted Overleaf cookie.")
-def login(username, password, cookie_path):
+@click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
+def login(username, password, cookie_path, verbose):
     if os.path.isfile(cookie_path) and not click.confirm(
             'Persisted Overleaf cookie already exist. Do you want to override it?'):
         return
@@ -115,7 +123,7 @@ def login(username, password, cookie_path):
     execute_action(lambda: login_handler(username, password, cookie_path), "Login",
                    "Login successful. Cookie persisted as `" + click.format_filename(
                        cookie_path) + "`. You may now sync your project.",
-                   "Login failed. Check username and/or password.")
+                   "Login failed. Check username and/or password.", verbose)
 
 
 def login_handler(username, password, path):
@@ -141,7 +149,8 @@ def write_file(path, content):
         f.write(content)
 
 
-def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name, to_name):
+def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name,
+              to_name, verbose=False):
     click.echo("\nSyncing files from [%s] to [%s]" % (from_name, to_name))
     click.echo('='*40)
 
@@ -169,13 +178,23 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
         "\n[NEW] Following new file(s) created on [%s]" % to_name)
     for name in newly_add_list:
         click.echo("\t%s" % name)
-        create_file_at_to(name)
+        try:
+            create_file_at_to(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
 
     click.echo(
         "\n[UPDATE] Following file(s) updated on [%s]" % to_name)
     for name in update_list:
         click.echo("\t%s" % name)
-        create_file_at_to(name)
+        try:
+            create_file_at_to(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while updating file(s) on [%s]" % to_name)
 
     click.echo(
         "\n[SYNC] Following file(s) are up to date")
@@ -192,11 +211,13 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
     click.echo("")
 
 
-def execute_action(action, progress_message, success_message, fail_message):
+def execute_action(action, progress_message, success_message, fail_message, verbose_error_logging=False):
     with yaspin(text=progress_message, color="green") as spinner:
         try:
             success = action()
         except:
+            if verbose_error_logging:
+                print(traceback.format_exc())
             success = False
 
         if success:
