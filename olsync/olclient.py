@@ -72,6 +72,11 @@ class OverleafClient(object):
             # Enrich cookie with gke-route cookie from GET request above
             self._cookie['gke-route'] = get_login.cookies['gke-route']
 
+            # CSRF changes after making the login request, new CSRF token will be on the projects page
+            projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+            self._csrf = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'}) \
+                .get('content')
+
             return {"cookie": self._cookie, "csrf": self._csrf}
 
     def all_projects(self):
@@ -120,17 +125,21 @@ class OverleafClient(object):
 
         params = {
             "parent_folder_id": parent_folder_id,
-            "_csrf": self._csrf,
             "name": folder_name
         }
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
         r = reqs.post(FOLDER_URL.format(project_id),
-                      cookies=self._cookie, json=params)
+                      cookies=self._cookie, headers=headers, json=params)
 
         if r.ok:
             return json.loads(r.content)["_id"]
         elif r.status_code == str(400):
             # Folder already exists
             return
+        else:
+            raise reqs.HTTPError()
 
     def get_project_infos(self, project_id):
         """
@@ -152,9 +161,9 @@ class OverleafClient(object):
         # Convert cookie from CookieJar to string
         cookie = "gke-route={}; overleaf_session2={}" \
             .format(
-                reqs.utils.dict_from_cookiejar(self._cookie)["gke-route"],
-                reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
-            )
+            reqs.utils.dict_from_cookiejar(self._cookie)["gke-route"],
+            reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
+        )
 
         # Connect to Overleaf Socket.IO, send a time parameter and the cookies
         socket_io = SocketIO(
