@@ -13,7 +13,7 @@ This tool provides an easy way to synchronize Overleaf projects from and to your
 - Sync your remotely modified `.tex` (and other) files to computer
 - Works with free Overleaf account
 - No Git or Dropbox required
-- Does not steal or store your login credentials (works with a persisted cookie, [check yourself](https://github.com/moritzgloeckl/overleaf-sync/blob/master/olsync/olclient.py#L40))
+- Does not steal or store your login credentials (works with a persisted cookie, [check yourself](https://github.com/moritzgloeckl/overleaf-sync/blob/master/olsync/olclient.py#L55))
 
 ## How To Use
 ### Install
