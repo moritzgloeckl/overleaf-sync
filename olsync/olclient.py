@@ -6,7 +6,7 @@
 # Description: Overleaf API Wrapper
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.3
+# Version: 1.1.4
 ##################################################
 
 import requests as reqs
@@ -69,8 +69,8 @@ class OverleafClient(object):
             "overleaf_session2"]:
             self._cookie = post_login.cookies
 
-            # Enrich cookie with gke-route cookie from GET request above
-            self._cookie['gke-route'] = get_login.cookies['gke-route']
+            # Enrich cookie with GCLB cookie from GET request above
+            self._cookie['GCLB'] = get_login.cookies['GCLB']
 
             # CSRF changes after making the login request, new CSRF token will be on the projects page
             projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
@@ -159,9 +159,9 @@ class OverleafClient(object):
             project_infos = project_infos_dict
 
         # Convert cookie from CookieJar to string
-        cookie = "gke-route={}; overleaf_session2={}" \
+        cookie = "GCLB={}; overleaf_session2={}" \
             .format(
-            reqs.utils.dict_from_cookiejar(self._cookie)["gke-route"],
+            reqs.utils.dict_from_cookiejar(self._cookie)["GCLB"],
             reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
         )
 
