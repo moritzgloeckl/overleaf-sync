@@ -1,0 +1,7 @@
+language: python
+python:
+  - "3.9"
+install:
+  - pip install -r requirements.txt
+script:
+  - python3 -m unittest discover tests
