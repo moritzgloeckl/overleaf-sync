@@ -4,3 +4,5 @@ yaspin
 python-dateutil
 click
 socketIO-client == 0.5.7.2
+responses
+mock
