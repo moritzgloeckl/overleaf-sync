@@ -135,7 +135,7 @@ class OverleafClient(object):
 
         if r.ok:
             return json.loads(r.content)["_id"]
-        elif r.status_code == str(400):
+        elif str(r.status_code) == str(400):
             # Folder already exists
             return
         else:
@@ -234,4 +234,4 @@ class OverleafClient(object):
         # Upload the file to the predefined folder
         r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
 
-        return r.status_code == str(200) and json.loads(r.content)["success"]
+        return str(r.status_code) == str(200) and json.loads(r.content)["success"]
