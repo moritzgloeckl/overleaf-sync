@@ -47,6 +47,7 @@ class OverleafClient(object):
 
     def login(self, username, password):
         """
+        WARNING - DEPRECATED - Not working as Overleaf introduced captchas
         Login to the Overleaf Service with a username and a password
         Params: username, password
         Returns: Dict of cookie and CSRF
@@ -161,8 +162,8 @@ class OverleafClient(object):
         # Convert cookie from CookieJar to string
         cookie = "GCLB={}; overleaf_session2={}" \
             .format(
-            reqs.utils.dict_from_cookiejar(self._cookie)["GCLB"],
-            reqs.utils.dict_from_cookiejar(self._cookie)["overleaf_session2"]
+            self._cookie["GCLB"],
+            self._cookie["overleaf_session2"]
         )
 
         # Connect to Overleaf Socket.IO, send a time parameter and the cookies

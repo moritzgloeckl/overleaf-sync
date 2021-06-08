@@ -11,7 +11,19 @@ author-email = "moritzgloeckl@users.noreply.github.com"
 home-page = "https://github.com/moritzgloeckl/overleaf-sync"
 classifiers = ["License :: OSI Approved :: MIT License", "Intended Audience :: Science/Research", "Programming Language :: Python :: 3"]
 requires-python = ">=3"
-requires = ["requests", "beautifulsoup4", "yaspin", "python-dateutil", "click", "socketIO-client == 0.5.7.2"]
+requires = [
+    "requests",
+    "beautifulsoup4",
+    "yaspin",
+    "python-dateutil",
+    "click",
+    "socketIO-client == 0.5.7.2",
+    "PyQt5",
+    "PyQt5-Qt5",
+    "PyQt5-sip",
+    "PyQtWebEngine",
+    "PyQtWebEngine-Qt5"
+]
 keywords = "overleaf sync latex tex"
 
 [tool.flit.scripts]

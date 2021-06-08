@@ -23,9 +23,11 @@ import traceback
 try:
     # Import for pip installation / wheel
     from olsync.olclient import OverleafClient
+    import olsync.olbrowserlogin as olbrowserlogin
 except ImportError:
     # Import for development
     from olclient import OverleafClient
+    import olbrowserlogin
 
 
 @click.group(invoke_without_command=True)
@@ -41,7 +43,7 @@ except ImportError:
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local).")
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-@click.version_option()
+@click.version_option(package_name='overleaf-sync')
 @click.pass_context
 def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, verbose):
     if ctx.invoked_subcommand is None:
@@ -108,27 +110,22 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 
 
 @main.command()
-@click.option('-u', '--username', prompt=True, required=True,
-              help="You Overleaf username. Will NOT be stored or used for anything else.")
-@click.option('-p', '--password', prompt=True, hide_input=True, required=True,
-              help="You Overleaf password. Will NOT be stored or used for anything else.")
 @click.option('--path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Path to store the persisted Overleaf cookie.")
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-def login(username, password, cookie_path, verbose):
+def login(cookie_path, verbose):
     if os.path.isfile(cookie_path) and not click.confirm(
             'Persisted Overleaf cookie already exist. Do you want to override it?'):
         return
     click.clear()
-    execute_action(lambda: login_handler(username, password, cookie_path), "Login",
+    execute_action(lambda: login_handler(cookie_path), "Login",
                    "Login successful. Cookie persisted as `" + click.format_filename(
                        cookie_path) + "`. You may now sync your project.",
-                   "Login failed. Check username and/or password.", verbose)
+                   "Login failed. Please try again.", verbose)
 
 
-def login_handler(username, password, path):
-    overleaf_client = OverleafClient()
-    store = overleaf_client.login(username, password)
+def login_handler(path):
+    store = olbrowserlogin.login()
     if store is None:
         return False
     with open(path, 'wb+') as f:
