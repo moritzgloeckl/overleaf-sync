@@ -34,6 +34,7 @@ except ImportError:
 @click.option('-l', '--local-only', 'local', is_flag=True, help="Sync local project files to Overleaf only.")
 @click.option('-r', '--remote-only', 'remote', is_flag=True,
               help="Sync remote project files from Overleaf to local file system only.")
+@click.option('-L', '--list', 'list_projects', is_flag=True, help="List all projects.")
 @click.option('-n', '--name', 'project_name', default="",
               help="Specify the Overleaf project name instead of the default name of the sync directory.")
 @click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
@@ -45,7 +46,7 @@ except ImportError:
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name='overleaf-sync')
 @click.pass_context
-def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, verbose):
+def main(ctx, local, remote, list_projects, project_name, cookie_path, sync_path, olignore_path, verbose):
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
             raise click.ClickException(
@@ -58,6 +59,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 
         # Change the current directory to the specified sync path
         os.chdir(sync_path)
+
+        if list_projects:
+            for p in sorted(overleaf_client.all_projects(), key=lambda x: x['lastUpdated'], reverse=True):
+                print(p['lastUpdated'], p['name'])
+            return
 
         project_name = project_name or os.path.basename(os.getcwd())
         project = execute_action(
