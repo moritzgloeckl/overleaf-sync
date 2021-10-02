@@ -2,7 +2,7 @@ requests~=2.25.1
 beautifulsoup4~=4.9.3
 yaspin~=2.0.0
 python-dateutil~=2.8.1
-click~=8.0.1
+click == 8.0.1
 socketIO-client == 0.5.7.2
 PyQt5~=5.15.4
 PyQt5-Qt5~=5.15.2

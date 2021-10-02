@@ -16,7 +16,7 @@ requires = [
     "beautifulsoup4",
     "yaspin",
     "python-dateutil",
-    "click",
+    "click == 8.0.1",
     "socketIO-client == 0.5.7.2",
     "PyQt5",
     "PyQt5-Qt5",
