@@ -43,6 +43,17 @@ It then stores your *cookie* (**not** your login credentials) in a hidden file c
 
 Keep the `.olauth` file save, as it can be used to log in into your account.
 
+### Listing all projects
+```
+moritz@github:~/test$ ols list [--store-path -v/--verbose]
+10/31/2021, 01:23:45 - Project A
+09/21/2020, 01:23:45 - Project B
+08/11/2019, 01:23:45 - Project C
+07/01/2018, 01:23:45 - Project D
+```
+
+Use `ols list` to conveniently list all projects in your account available for syncing. 
+
 ### Syncing
 ```
 moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path -i/--olignore]

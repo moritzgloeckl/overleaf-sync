@@ -124,6 +124,33 @@ def login(cookie_path, verbose):
                    "Login failed. Please try again.", verbose)
 
 
+@main.command(name='list')
+@click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
+              help="Relative path to load the persisted Overleaf cookie.")
+@click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
+def list_projects(cookie_path, verbose):
+    def query_projects():
+        for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x['lastUpdated'], reverse=True)):
+            if not index:
+                click.echo("\n")
+            click.echo(f"{dateutil.parser.isoparse(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
+        return True
+
+    if not os.path.isfile(cookie_path):
+        raise click.ClickException(
+            "Persisted Overleaf cookie not found. Please login or check store path.")
+
+    with open(cookie_path, 'rb') as f:
+        store = pickle.load(f)
+
+    overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+
+    click.clear()
+    execute_action(query_projects, "Querying all projects",
+                   "Querying all projects successful.",
+                   "Querying all projects failed. Please try again.", verbose)
+
+
 def login_handler(path):
     store = olbrowserlogin.login()
     if store is None:
