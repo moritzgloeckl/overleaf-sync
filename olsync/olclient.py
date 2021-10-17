@@ -6,7 +6,7 @@
 # Description: Overleaf API Wrapper
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.5
+# Version: 1.1.6
 ##################################################
 
 import requests as reqs
