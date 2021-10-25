@@ -248,8 +248,8 @@ def execute_action(action, progress_message, success_message, fail_message, verb
             spinner.write(success_message)
             spinner.ok("✅ ")
         else:
-            raise click.ClickException(fail_message)
             spinner.fail("💥 ")
+            raise click.ClickException(fail_message)
 
         return success
 
