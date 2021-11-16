@@ -15,6 +15,7 @@ import json
 import uuid
 from socketIO_client import SocketIO
 import time
+import os
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -204,8 +205,8 @@ class OverleafClient(object):
         folder_id = project_infos['rootFolder'][0]['_id']
 
         # The file name contains path separators, check folders
-        if "/" in file_name:
-            local_folders = file_name.split("/")[:-1]  # Remove last item since this is the file name
+        if os.sep in file_name:
+            local_folders = file_name.split(os.sep)[:-1]  # Remove last item since this is the file name
             current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
 
             for local_folder in local_folders:
