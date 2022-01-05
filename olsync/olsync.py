@@ -19,6 +19,7 @@ import dateutil.parser
 import glob
 import fnmatch
 import traceback
+from pathlib import Path
 
 try:
     # Import for pip installation / wheel
@@ -274,7 +275,7 @@ def olignore_keep_list(olignore_path):
         keep_list = [f for f in files if not any(
             fnmatch.fnmatch(f, ignore) for ignore in ignore_pattern)]
 
-    keep_list = [item for item in keep_list if not os.path.isdir(item)]
+    keep_list = [Path(item).as_posix() for item in keep_list if not os.path.isdir(item)]
     return keep_list
 
 
