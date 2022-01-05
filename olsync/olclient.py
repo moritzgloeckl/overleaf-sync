@@ -136,7 +136,7 @@ class OverleafClient(object):
                       cookies=self._cookie, headers=headers, json=params)
 
         if r.ok:
-            return json.loads(r.content)["_id"]
+            return json.loads(r.content)
         elif r.status_code == str(400):
             # Folder already exists
             return
@@ -220,8 +220,10 @@ class OverleafClient(object):
                         break
                 # Create the folder if it doesn't exist
                 if not exists_on_remote:
-                    folder_id = self.create_folder(project_id, folder_id, local_folder)
-
+                    new_folder = self.create_folder(project_id, folder_id, local_folder)
+                    current_overleaf_folder.append(new_folder)
+                    folder_id = new_folder['_id']
+                    current_overleaf_folder = new_folder['folders']
         params = {
             "folder_id": folder_id,
             "_csrf": self._csrf,
