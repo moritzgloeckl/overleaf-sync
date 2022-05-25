@@ -18,11 +18,7 @@ requires = [
     "python-dateutil",
     "click == 8.0.1",
     "socketIO-client == 0.5.7.2",
-    "PyQt5",
-    "PyQt5-Qt5",
-    "PyQt5-sip",
-    "PyQtWebEngine",
-    "PyQtWebEngine-Qt5"
+    "PySide6 == 6.3.0"
 ]
 keywords = "overleaf sync latex tex"
 
