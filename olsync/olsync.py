@@ -42,7 +42,8 @@ except ImportError:
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
-              help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local).")
+              help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local). See "
+                   "fnmatch / unix filename pattern matching for information on how to use it.")
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name='overleaf-sync')
 @click.pass_context
