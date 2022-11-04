@@ -252,13 +252,30 @@ class OverleafClient(object):
 
         Returns: True on success, False on fail
         """
-        file_id = next(v for v in project_infos['rootFolder'][0]['docs'] if v['name'] == file_name)['_id']
+
+        file = None
+
+        # The file name contains path separators, check folders
+        if sep in file_name:
+            local_folders = file_name.split(sep)[:-1]  # Remove last item since this is the file name
+            current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
+
+            for local_folder in local_folders:
+                for remote_folder in current_overleaf_folder:
+                    if local_folder.lower() == remote_folder['name'].lower():
+                        file = next((v for v in remote_folder['docs'] if v['name'] == file_name.split(sep)[-1]), None)
+                        current_overleaf_folder = remote_folder['folders']
+                        break
+
+        # File not found!
+        if file is None:
+            return False
 
         headers = {
             "X-Csrf-Token": self._csrf
         }
 
-        r = reqs.delete(DELETE_URL.format(project_id, file_id), cookies=self._cookie, headers=headers, json={})
+        r = reqs.delete(DELETE_URL.format(project_id, file['_id']), cookies=self._cookie, headers=headers, json={})
 
         return r.status_code == str(204)
 
