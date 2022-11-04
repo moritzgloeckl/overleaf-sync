@@ -211,6 +211,7 @@ def login_handler(path):
         pickle.dump(store, f)
     return True
 
+
 def delete_file(path):
     _dir = os.path.dirname(path)
     if _dir == path:
