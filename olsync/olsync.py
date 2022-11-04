@@ -160,6 +160,49 @@ def list_projects(cookie_path, verbose):
                    "Querying all projects failed. Please try again.", verbose)
 
 
+@main.command(name='download')
+@click.option('-n', '--name', 'project_name', default="",
+              help="Specify the Overleaf project name instead of the default name of the sync directory.")
+@click.option('--download-path', 'download_path', default=".", type=click.Path(exists=True))
+@click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
+              help="Relative path to load the persisted Overleaf cookie.")
+@click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
+def download_pdf(project_name, download_path, cookie_path, verbose):
+    def download_project_pdf():
+        nonlocal project_name
+        project_name = project_name or os.path.basename(os.getcwd())
+        project = execute_action(
+            lambda: overleaf_client.get_project(project_name),
+            "Querying project",
+            "Project queried successfully.",
+            "Project could not be queried.",
+            verbose)
+
+        file_name, content = overleaf_client.download_pdf(project["id"])
+
+        if file_name and content:
+            # Change the current directory to the specified sync path
+            os.chdir(download_path)
+            open(file_name, 'wb').write(content)
+
+        return True
+
+    if not os.path.isfile(cookie_path):
+        raise click.ClickException(
+            "Persisted Overleaf cookie not found. Please login or check store path.")
+
+    with open(cookie_path, 'rb') as f:
+        store = pickle.load(f)
+
+    overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+
+    click.clear()
+
+    execute_action(download_project_pdf, "Downloading project's PDF",
+                   "Downloading project's PDF successful.",
+                   "Downloading project's PDF failed. Please try again.", verbose)
+
+
 def login_handler(path):
     store = olbrowserlogin.login()
     if store is None:

@@ -25,6 +25,7 @@ DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
 UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
 FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
 DELETE_URL = "https://www.overleaf.com/project/{}/doc/{}"  # The URL to delete files
+COMPILE_URL = "https://www.overleaf.com/project/{}/compile?enable_pdf_caching=true"  # The URL to compile the project
 BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
 
 
@@ -261,3 +262,42 @@ class OverleafClient(object):
 
         return r.status_code == str(204)
 
+    def download_pdf(self, project_id):
+        """
+        Compiles and returns a project's PDF
+
+        Params:
+        project_id: the id of the project
+
+        Returns: PDF file name and content on success
+        """
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
+
+        body = {
+            "check": "silent",
+            "draft": False,
+            "incrementalCompilesEnabled": True,
+            "rootDoc_id": "",
+            "stopOnFirstError": False
+        }
+
+        r = reqs.post(COMPILE_URL.format(project_id), cookies=self._cookie, headers=headers, json=body)
+
+        if not r.ok:
+            raise reqs.HTTPError()
+
+        compile_result = json.loads(r.content)
+
+        if compile_result["status"] != "success":
+            raise reqs.HTTPError()
+
+        pdf_file = next(v for v in compile_result['outputFiles'] if v['type'] == 'pdf')
+
+        download_req = reqs.get(BASE_URL + pdf_file['url'], cookies=self._cookie, headers=headers)
+
+        if download_req.ok:
+            return pdf_file['path'], download_req.content
+
+        return None
