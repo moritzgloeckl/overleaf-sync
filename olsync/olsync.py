@@ -89,7 +89,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
         if remote or sync:
             sync_func(
                 files_from=zip_file.namelist(),
+                deleted_files=[f for f in olignore_keep_list(olignore_path) if f not in zip_file.namelist() and not sync],
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
+                delete_file_at_to=lambda name: delete_file(name),
+                create_file_at_from=lambda name: overleaf_client.upload_file(
+                    project["id"], project_infos, name, os.path.getsize(name), open(name, 'rb')),
                 from_exists_in_to=lambda name: os.path.isfile(name),
                 from_equal_to_to=lambda name: open(name, 'rb').read() == zip_file.read(name),
                 from_newer_than_to=lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() >
@@ -100,8 +104,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
         if local or sync:
             sync_func(
                 files_from=olignore_keep_list(olignore_path),
+                deleted_files=[f for f in zip_file.namelist() if f not in olignore_keep_list(olignore_path) and not sync],
                 create_file_at_to=lambda name: overleaf_client.upload_file(
                     project["id"], project_infos, name, os.path.getsize(name), open(name, 'rb')),
+                delete_file_at_to=lambda name: overleaf_client.delete_file(project["id"], project_infos, name),
+                create_file_at_from=lambda name: write_file(name, zip_file.read(name)),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
                 from_equal_to_to=lambda name: open(name, 'rb').read() == zip_file.read(name),
                 from_newer_than_to=lambda name: os.path.getmtime(name) > dateutil.parser.isoparse(
@@ -161,6 +168,15 @@ def login_handler(path):
         pickle.dump(store, f)
     return True
 
+def delete_file(path):
+    _dir = os.path.dirname(path)
+    if _dir == path:
+        return
+
+    if _dir != '' and not os.path.exists(_dir):
+        return
+    else:
+        os.remove(path)
 
 def write_file(path, content):
     _dir = os.path.dirname(path)
@@ -175,13 +191,17 @@ def write_file(path, content):
         f.write(content)
 
 
-def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name,
+def sync_func(files_from, deleted_files, create_file_at_to, delete_file_at_to, create_file_at_from, from_exists_in_to,
+              from_equal_to_to, from_newer_than_to, from_name,
               to_name, verbose=False):
     click.echo("\nSyncing files from [%s] to [%s]" % (from_name, to_name))
-    click.echo('='*40)
+    click.echo('=' * 40)
 
     newly_add_list = []
     update_list = []
+    delete_list = []
+    restore_list = []
+    not_restored_list = []
     not_sync_list = []
     synced_list = []
 
@@ -200,6 +220,19 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
         else:
             newly_add_list.append(name)
 
+    for name in deleted_files:
+        delete_choice = click.prompt(
+            '\n-> Warning: file <%s> does not exist on [%s] anymore (but it still exists on [%s]).'
+            '\nShould the file be [d]eleted, [r]estored or [i]gnored?' % (name, from_name, to_name),
+            default="i",
+            type=click.Choice(['d', 'r', 'i']))
+        if delete_choice == "d":
+            delete_list.append(name)
+        elif delete_choice == "r":
+            restore_list.append(name)
+        elif delete_choice == "i":
+            not_restored_list.append(name)
+
     click.echo(
         "\n[NEW] Following new file(s) created on [%s]" % to_name)
     for name in newly_add_list:
@@ -210,6 +243,17 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
             if verbose:
                 print(traceback.format_exc())
             raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
+
+    click.echo(
+        "\n[NEW] Following new file(s) created on [%s]" % from_name)
+    for name in restore_list:
+        click.echo("\t%s" % name)
+        try:
+            create_file_at_from(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % from_name)
 
     click.echo(
         "\n[UPDATE] Following file(s) updated on [%s]" % to_name)
@@ -223,6 +267,17 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
             raise click.ClickException("\n[ERROR] An error occurred while updating file(s) on [%s]" % to_name)
 
     click.echo(
+        "\n[DELETE] Following file(s) deleted on [%s]" % to_name)
+    for name in delete_list:
+        click.echo("\t%s" % name)
+        try:
+            delete_file_at_to(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
+
+    click.echo(
         "\n[SYNC] Following file(s) are up to date")
     for name in synced_list:
         click.echo("\t%s" % name)
@@ -230,6 +285,11 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
     click.echo(
         "\n[SKIP] Following file(s) on [%s] have not been synced to [%s]" % (from_name, to_name))
     for name in not_sync_list:
+        click.echo("\t%s" % name)
+
+    click.echo(
+        "\n[SKIP] Following file(s) on [%s] have not been synced to [%s]" % (to_name, from_name))
+    for name in not_restored_list:
         click.echo("\t%s" % name)
 
     click.echo("")

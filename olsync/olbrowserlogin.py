@@ -8,6 +8,7 @@
 # License: MIT
 # Version: 1.1.6
 ##################################################
+
 from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 from PySide6.QtWebEngineWidgets import *
@@ -82,6 +83,11 @@ class OlBrowserLoginWindow(QMainWindow):
 
 
 def login():
+    from PySide6.QtCore import QLoggingCategory
+    QLoggingCategory.setFilterRules('''\
+    qt.webenginecontext.info=false
+    ''')
+
     app = QApplication([])
     ol_browser_login_window = OlBrowserLoginWindow()
     ol_browser_login_window.show()

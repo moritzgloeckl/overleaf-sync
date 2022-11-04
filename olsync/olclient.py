@@ -24,6 +24,7 @@ PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
 DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
 UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
 FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
+DELETE_URL = "https://www.overleaf.com/project/{}/doc/{}"  # The URL to delete files
 BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
 
 
@@ -239,3 +240,24 @@ class OverleafClient(object):
         r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
 
         return r.status_code == str(200) and json.loads(r.content)["success"]
+
+    def delete_file(self, project_id, project_infos, file_name):
+        """
+        Deletes a project's file
+
+        Params:
+        project_id: the id of the project
+        file_name: how the file will be named
+
+        Returns: True on success, False on fail
+        """
+        file_id = next(v for v in project_infos['rootFolder'][0]['docs'] if v['name'] == file_name)['_id']
+
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
+
+        r = reqs.delete(DELETE_URL.format(project_id, file_id), cookies=self._cookie, headers=headers, json={})
+
+        return r.status_code == str(204)
+
