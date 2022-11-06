@@ -15,7 +15,6 @@ import json
 import uuid
 from socketIO_client import SocketIO
 import time
-from os import sep
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -27,7 +26,7 @@ FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create f
 DELETE_URL = "https://www.overleaf.com/project/{}/doc/{}"  # The URL to delete files
 COMPILE_URL = "https://www.overleaf.com/project/{}/compile?enable_pdf_caching=true"  # The URL to compile the project
 BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
-
+PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
 
 class OverleafClient(object):
     """
@@ -207,8 +206,8 @@ class OverleafClient(object):
         folder_id = project_infos['rootFolder'][0]['_id']
 
         # The file name contains path separators, check folders
-        if sep in file_name:
-            local_folders = file_name.split(sep)[:-1]  # Remove last item since this is the file name
+        if PATH_SEP in file_name:
+            local_folders = file_name.split(PATH_SEP)[:-1]  # Remove last item since this is the file name
             current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
 
             for local_folder in local_folders:
@@ -256,8 +255,8 @@ class OverleafClient(object):
         file = None
 
         # The file name contains path separators, check folders
-        if sep in file_name:
-            local_folders = file_name.split(sep)[:-1]  # Remove last item since this is the file name
+        if PATH_SEP in file_name:
+            local_folders = file_name.split(PATH_SEP)[:-1]  # Remove last item since this is the file name
             current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
 
             for local_folder in local_folders:

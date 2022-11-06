@@ -222,6 +222,7 @@ def delete_file(path):
     else:
         os.remove(path)
 
+
 def write_file(path, content):
     _dir = os.path.dirname(path)
     if _dir == path:
