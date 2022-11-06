@@ -6,7 +6,7 @@
 # Description: Overleaf Two-Way Sync
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.6
+# Version: 1.2.0
 ##################################################
 
 import click

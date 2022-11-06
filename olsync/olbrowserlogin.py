@@ -6,7 +6,7 @@
 # Description: Overleaf Browser Login Utility
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.6
+# Version: 1.2.0
 ##################################################
 
 from PySide6.QtCore import *
