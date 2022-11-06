@@ -262,9 +262,13 @@ class OverleafClient(object):
             for local_folder in local_folders:
                 for remote_folder in current_overleaf_folder:
                     if local_folder.lower() == remote_folder['name'].lower():
-                        file = next((v for v in remote_folder['docs'] if v['name'] == file_name.split(sep)[-1]), None)
+                        file = next((v for v in remote_folder['docs'] if v['name'] == file_name.split(PATH_SEP)[-1]),
+                                    None)
                         current_overleaf_folder = remote_folder['folders']
                         break
+        # File is in root folder
+        else:
+            file = next((v for v in project_infos['rootFolder'][0]['docs'] if v['name'] == file_name), None)
 
         # File not found!
         if file is None:
