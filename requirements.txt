@@ -1,11 +1,7 @@
-requests~=2.25.1
-beautifulsoup4~=4.9.3
-yaspin~=2.0.0
+requests==2.*
+beautifulsoup4==4.11.1
+yaspin==2.*
 python-dateutil~=2.8.1
-click == 8.0.1
-socketIO-client == 0.5.7.2
-PyQt5~=5.15.4
-PyQt5-Qt5~=5.15.2
-PyQt5-sip~=12.9.0
-PyQtWebEngine~=5.15.4
-PyQtWebEngine-Qt5~=5.15.2
+click==8.*
+socketIO-client==0.5.7.2 # Do not upgrade!
+PySide6==6.*

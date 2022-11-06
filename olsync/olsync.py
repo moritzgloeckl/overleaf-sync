@@ -6,7 +6,7 @@
 # Description: Overleaf Two-Way Sync
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.6
+# Version: 1.2.0
 ##################################################
 
 import click
@@ -42,7 +42,8 @@ except ImportError:
 @click.option('-p', '--path', 'sync_path', default=".", type=click.Path(exists=True),
               help="Path of the project to sync.")
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
-              help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local).")
+              help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local). See "
+                   "fnmatch / unix filename pattern matching for information on how to use it.")
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name='overleaf-sync')
 @click.pass_context
@@ -88,7 +89,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
         if remote or sync:
             sync_func(
                 files_from=zip_file.namelist(),
+                deleted_files=[f for f in olignore_keep_list(olignore_path) if f not in zip_file.namelist() and not sync],
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
+                delete_file_at_to=lambda name: delete_file(name),
+                create_file_at_from=lambda name: overleaf_client.upload_file(
+                    project["id"], project_infos, name, os.path.getsize(name), open(name, 'rb')),
                 from_exists_in_to=lambda name: os.path.isfile(name),
                 from_equal_to_to=lambda name: open(name, 'rb').read() == zip_file.read(name),
                 from_newer_than_to=lambda name: dateutil.parser.isoparse(project["lastUpdated"]).timestamp() >
@@ -99,8 +104,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
         if local or sync:
             sync_func(
                 files_from=olignore_keep_list(olignore_path),
+                deleted_files=[f for f in zip_file.namelist() if f not in olignore_keep_list(olignore_path) and not sync],
                 create_file_at_to=lambda name: overleaf_client.upload_file(
                     project["id"], project_infos, name, os.path.getsize(name), open(name, 'rb')),
+                delete_file_at_to=lambda name: overleaf_client.delete_file(project["id"], project_infos, name),
+                create_file_at_from=lambda name: write_file(name, zip_file.read(name)),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
                 from_equal_to_to=lambda name: open(name, 'rb').read() == zip_file.read(name),
                 from_newer_than_to=lambda name: os.path.getmtime(name) > dateutil.parser.isoparse(
@@ -152,6 +160,49 @@ def list_projects(cookie_path, verbose):
                    "Querying all projects failed. Please try again.", verbose)
 
 
+@main.command(name='download')
+@click.option('-n', '--name', 'project_name', default="",
+              help="Specify the Overleaf project name instead of the default name of the sync directory.")
+@click.option('--download-path', 'download_path', default=".", type=click.Path(exists=True))
+@click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
+              help="Relative path to load the persisted Overleaf cookie.")
+@click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
+def download_pdf(project_name, download_path, cookie_path, verbose):
+    def download_project_pdf():
+        nonlocal project_name
+        project_name = project_name or os.path.basename(os.getcwd())
+        project = execute_action(
+            lambda: overleaf_client.get_project(project_name),
+            "Querying project",
+            "Project queried successfully.",
+            "Project could not be queried.",
+            verbose)
+
+        file_name, content = overleaf_client.download_pdf(project["id"])
+
+        if file_name and content:
+            # Change the current directory to the specified sync path
+            os.chdir(download_path)
+            open(file_name, 'wb').write(content)
+
+        return True
+
+    if not os.path.isfile(cookie_path):
+        raise click.ClickException(
+            "Persisted Overleaf cookie not found. Please login or check store path.")
+
+    with open(cookie_path, 'rb') as f:
+        store = pickle.load(f)
+
+    overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+
+    click.clear()
+
+    execute_action(download_project_pdf, "Downloading project's PDF",
+                   "Downloading project's PDF successful.",
+                   "Downloading project's PDF failed. Please try again.", verbose)
+
+
 def login_handler(path):
     store = olbrowserlogin.login()
     if store is None:
@@ -159,6 +210,17 @@ def login_handler(path):
     with open(path, 'wb+') as f:
         pickle.dump(store, f)
     return True
+
+
+def delete_file(path):
+    _dir = os.path.dirname(path)
+    if _dir == path:
+        return
+
+    if _dir != '' and not os.path.exists(_dir):
+        return
+    else:
+        os.remove(path)
 
 
 def write_file(path, content):
@@ -174,13 +236,17 @@ def write_file(path, content):
         f.write(content)
 
 
-def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to, from_newer_than_to, from_name,
+def sync_func(files_from, deleted_files, create_file_at_to, delete_file_at_to, create_file_at_from, from_exists_in_to,
+              from_equal_to_to, from_newer_than_to, from_name,
               to_name, verbose=False):
     click.echo("\nSyncing files from [%s] to [%s]" % (from_name, to_name))
-    click.echo('='*40)
+    click.echo('=' * 40)
 
     newly_add_list = []
     update_list = []
+    delete_list = []
+    restore_list = []
+    not_restored_list = []
     not_sync_list = []
     synced_list = []
 
@@ -199,6 +265,19 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
         else:
             newly_add_list.append(name)
 
+    for name in deleted_files:
+        delete_choice = click.prompt(
+            '\n-> Warning: file <%s> does not exist on [%s] anymore (but it still exists on [%s]).'
+            '\nShould the file be [d]eleted, [r]estored or [i]gnored?' % (name, from_name, to_name),
+            default="i",
+            type=click.Choice(['d', 'r', 'i']))
+        if delete_choice == "d":
+            delete_list.append(name)
+        elif delete_choice == "r":
+            restore_list.append(name)
+        elif delete_choice == "i":
+            not_restored_list.append(name)
+
     click.echo(
         "\n[NEW] Following new file(s) created on [%s]" % to_name)
     for name in newly_add_list:
@@ -209,6 +288,17 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
             if verbose:
                 print(traceback.format_exc())
             raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
+
+    click.echo(
+        "\n[NEW] Following new file(s) created on [%s]" % from_name)
+    for name in restore_list:
+        click.echo("\t%s" % name)
+        try:
+            create_file_at_from(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % from_name)
 
     click.echo(
         "\n[UPDATE] Following file(s) updated on [%s]" % to_name)
@@ -222,6 +312,17 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
             raise click.ClickException("\n[ERROR] An error occurred while updating file(s) on [%s]" % to_name)
 
     click.echo(
+        "\n[DELETE] Following file(s) deleted on [%s]" % to_name)
+    for name in delete_list:
+        click.echo("\t%s" % name)
+        try:
+            delete_file_at_to(name)
+        except:
+            if verbose:
+                print(traceback.format_exc())
+            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
+
+    click.echo(
         "\n[SYNC] Following file(s) are up to date")
     for name in synced_list:
         click.echo("\t%s" % name)
@@ -229,6 +330,11 @@ def sync_func(files_from, create_file_at_to, from_exists_in_to, from_equal_to_to
     click.echo(
         "\n[SKIP] Following file(s) on [%s] have not been synced to [%s]" % (from_name, to_name))
     for name in not_sync_list:
+        click.echo("\t%s" % name)
+
+    click.echo(
+        "\n[SKIP] Following file(s) on [%s] have not been synced to [%s]" % (to_name, from_name))
+    for name in not_restored_list:
         click.echo("\t%s" % name)
 
     click.echo("")

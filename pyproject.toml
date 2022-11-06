@@ -12,17 +12,13 @@ home-page = "https://github.com/moritzgloeckl/overleaf-sync"
 classifiers = ["License :: OSI Approved :: MIT License", "Intended Audience :: Science/Research", "Programming Language :: Python :: 3"]
 requires-python = ">=3"
 requires = [
-    "requests",
-    "beautifulsoup4",
-    "yaspin",
-    "python-dateutil",
-    "click == 8.0.1",
+    "requests == 2.*",
+    "beautifulsoup4 == 4.11.1",
+    "yaspin == 2.*",
+    "python-dateutil~=2.8.1",
+    "click == 8.*",
     "socketIO-client == 0.5.7.2",
-    "PyQt5",
-    "PyQt5-Qt5",
-    "PyQt5-sip",
-    "PyQtWebEngine",
-    "PyQtWebEngine-Qt5"
+    "PySide6 == 6.*"
 ]
 keywords = "overleaf sync latex tex"
 

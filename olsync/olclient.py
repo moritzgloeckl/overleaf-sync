@@ -6,7 +6,7 @@
 # Description: Overleaf API Wrapper
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.6
+# Version: 1.2.0
 ##################################################
 
 import requests as reqs
@@ -15,7 +15,6 @@ import json
 import uuid
 from socketIO_client import SocketIO
 import time
-from os import sep
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -24,8 +23,10 @@ PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
 DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
 UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
 FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
+DELETE_URL = "https://www.overleaf.com/project/{}/doc/{}"  # The URL to delete files
+COMPILE_URL = "https://www.overleaf.com/project/{}/compile?enable_pdf_caching=true"  # The URL to compile the project
 BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
-
+PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
 
 class OverleafClient(object):
     """
@@ -205,8 +206,8 @@ class OverleafClient(object):
         folder_id = project_infos['rootFolder'][0]['_id']
 
         # The file name contains path separators, check folders
-        if sep in file_name:
-            local_folders = file_name.split(sep)[:-1]  # Remove last item since this is the file name
+        if PATH_SEP in file_name:
+            local_folders = file_name.split(PATH_SEP)[:-1]  # Remove last item since this is the file name
             current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
 
             for local_folder in local_folders:
@@ -239,3 +240,80 @@ class OverleafClient(object):
         r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
 
         return r.status_code == str(200) and json.loads(r.content)["success"]
+
+    def delete_file(self, project_id, project_infos, file_name):
+        """
+        Deletes a project's file
+
+        Params:
+        project_id: the id of the project
+        file_name: how the file will be named
+
+        Returns: True on success, False on fail
+        """
+
+        file = None
+
+        # The file name contains path separators, check folders
+        if PATH_SEP in file_name:
+            local_folders = file_name.split(PATH_SEP)[:-1]  # Remove last item since this is the file name
+            current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
+
+            for local_folder in local_folders:
+                for remote_folder in current_overleaf_folder:
+                    if local_folder.lower() == remote_folder['name'].lower():
+                        file = next((v for v in remote_folder['docs'] if v['name'] == file_name.split(sep)[-1]), None)
+                        current_overleaf_folder = remote_folder['folders']
+                        break
+
+        # File not found!
+        if file is None:
+            return False
+
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
+
+        r = reqs.delete(DELETE_URL.format(project_id, file['_id']), cookies=self._cookie, headers=headers, json={})
+
+        return r.status_code == str(204)
+
+    def download_pdf(self, project_id):
+        """
+        Compiles and returns a project's PDF
+
+        Params:
+        project_id: the id of the project
+
+        Returns: PDF file name and content on success
+        """
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
+
+        body = {
+            "check": "silent",
+            "draft": False,
+            "incrementalCompilesEnabled": True,
+            "rootDoc_id": "",
+            "stopOnFirstError": False
+        }
+
+        r = reqs.post(COMPILE_URL.format(project_id), cookies=self._cookie, headers=headers, json=body)
+
+        if not r.ok:
+            raise reqs.HTTPError()
+
+        compile_result = json.loads(r.content)
+
+        if compile_result["status"] != "success":
+            raise reqs.HTTPError()
+
+        pdf_file = next(v for v in compile_result['outputFiles'] if v['type'] == 'pdf')
+
+        download_req = reqs.get(BASE_URL + pdf_file['url'], cookies=self._cookie, headers=headers)
+
+        if download_req.ok:
+            return pdf_file['path'], download_req.content
+
+        return None

@@ -54,12 +54,21 @@ moritz@github:~/test$ ols list [--store-path -v/--verbose]
 
 Use `ols list` to conveniently list all projects in your account available for syncing. 
 
+### Downloading project's PDF
+```
+moritz@github:~/test$ ols download [--name --download-path --store-path -v/--verbose]
+```
+
+Use `ols download` to compile and download your project's PDF. Specify a download path if you do not want to store the PDF file in the current folder. Currently only downloads the first PDF file it finds.
+
 ### Syncing
 ```
 moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path -i/--olignore]
 ```
 
-Just calling `ols` will two-way sync your project. When there are changes both locally and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path, you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `-i/--olignore` option allows you to specify the path of an `.olignore` file which works exactly like `.gitignore`.
+Just calling `ols` will two-way sync your project. When there are changes both locally, and remotely you will be asked which file to keep. Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. When using these options you can also sync deleted files. If a file has been deleted it can either be deleted on the target (remote when `-l`, local when `-r`) as well, restored on the source (local when `-l`, remote when `-r`) or ignored.
+
+The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path, you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `-i/--olignore` option allows you to specify the path of an `.olignore` file. It uses `fnmatch` internally, so it may have some similarity to `.gitignore` but doesn't work exactly the same. For example, if you wish to exclude a specific folder named `out`, you need to specify it as `out/*`. See [here](https://docs.python.org/3/library/fnmatch.html) for more information.
 
 Sample Output:
 

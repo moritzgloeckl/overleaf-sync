@@ -6,12 +6,13 @@
 # Description: Overleaf Browser Login Utility
 # Author: Moritz Glöckl
 # License: MIT
-# Version: 1.1.6
+# Version: 1.2.0
 ##################################################
 
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtWebEngineWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtWidgets import *
+from PySide6.QtWebEngineWidgets import *
+from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings, QWebEnginePage
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -60,7 +61,7 @@ class OlBrowserLoginWindow(QMainWindow):
 
         if self.webview.url().toString() == PROJECT_URL:
             self.webview.page().runJavaScript(
-                JAVASCRIPT_CSRF_EXTRACTOR, callback
+                JAVASCRIPT_CSRF_EXTRACTOR, 0, callback
             )
 
     def handle_cookie_added(self, cookie):
@@ -82,6 +83,11 @@ class OlBrowserLoginWindow(QMainWindow):
 
 
 def login():
+    from PySide6.QtCore import QLoggingCategory
+    QLoggingCategory.setFilterRules('''\
+    qt.webenginecontext.info=false
+    ''')
+
     app = QApplication([])
     ol_browser_login_window = OlBrowserLoginWindow()
     ol_browser_login_window.show()
