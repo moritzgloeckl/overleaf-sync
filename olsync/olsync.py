@@ -191,7 +191,8 @@ def download_pdf(project_name, download_path, cookie_path, verbose):
             open(file_name, 'wb').write(content)
 
         return True
-
+    
+    click.echo("="*40)
     if not os.path.isfile(cookie_path):
         raise click.ClickException(
             "Persisted Overleaf cookie not found. Please login or check store path.")
@@ -374,7 +375,7 @@ def olignore_keep_list(olignore_path):
     # get list of files recursively (ignore .* files)
     files = glob.glob('**', recursive=True)
 
-    click.echo("="*40)
+    # click.echo("="*40)
     if not os.path.isfile(olignore_path):
         # click.echo("\nNotice: .olignore file does not exist, will sync all items.")
         keep_list = files
