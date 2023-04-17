@@ -83,6 +83,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
             "Project downloaded successfully.",
             "Project could not be downloaded.",
             verbose)
+            
+        if not os.path.isfile(olignore_path):
+            click.echo("\nNotice: .olignore file does not exist, will sync all items.")
+        else:
+            click.echo("\n.olignore: using %s to filter items" % olignore_path)
 
         sync = not (local or remote)
 
@@ -371,10 +376,10 @@ def olignore_keep_list(olignore_path):
 
     click.echo("="*40)
     if not os.path.isfile(olignore_path):
-        click.echo("\nNotice: .olignore file does not exist, will sync all items.")
+        # click.echo("\nNotice: .olignore file does not exist, will sync all items.")
         keep_list = files
     else:
-        click.echo("\n.olignore: using %s to filter items" % olignore_path)
+        # click.echo("\n.olignore: using %s to filter items" % olignore_path)
         with open(olignore_path, 'r') as f:
             ignore_pattern = f.read().splitlines()
 
