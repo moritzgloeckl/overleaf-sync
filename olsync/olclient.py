@@ -234,6 +234,7 @@ class OverleafClient(object):
             "qqtotalfilesize": file_size,
         }
         files = {
+            'name': (None, file_name),
             "qqfile": file
         }
 
