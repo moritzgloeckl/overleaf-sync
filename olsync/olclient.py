@@ -89,7 +89,7 @@ class OverleafClient(object):
         """
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
+            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-prefetchedProjectsBlob'}).get('content'))['projects']
         return list(OverleafClient.filter_projects(json_content))
 
     def get_project(self, project_name):
