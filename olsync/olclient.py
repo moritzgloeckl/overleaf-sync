@@ -15,6 +15,7 @@ import json
 import uuid
 from socketIO_client import SocketIO
 import time
+import re
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -89,9 +90,9 @@ class OverleafClient(object):
         """
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
         json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
-        return list(OverleafClient.filter_projects(json_content))
-
+            BeautifulSoup(projects_page.content, 'html.parser').find("meta", {"content": re.compile('\{.*"projects".*\}')}).get('content'))
+        return list(OverleafClient.filter_projects(json_content['projects']))
+        
     def get_project(self, project_name):
         """
         Get a specific project by project_name
@@ -100,9 +101,10 @@ class OverleafClient(object):
         """
 
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+
         json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
-        return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
+             BeautifulSoup(projects_page.content, 'html.parser').find("meta", {"content": re.compile('\{.*"projects".*\}')}).get('content'))
+        return next(OverleafClient.filter_projects(json_content['projects'], {"name": project_name}), None)
 
     def download_project(self, project_id):
         """
@@ -225,21 +227,30 @@ class OverleafClient(object):
                     current_overleaf_folder.append(new_folder)
                     folder_id = new_folder['_id']
                     current_overleaf_folder = new_folder['folders']
+        headers = {
+            "X-Csrf-Token": self._csrf
+        }
         params = {
             "folder_id": folder_id,
-            "_csrf": self._csrf,
-            "qquuid": str(uuid.uuid4()),
-            "qqfilename": file_name,
-            "qqtotalfilesize": file_size,
+            # "_csrf": self._csrf,
+            # "qquuid": str(uuid.uuid4()),
+            # "qqfilename": file_name,
+            # "qqtotalfilesize": file_size,
+        }
+        form_data = {
+            # "relativePath" : "null",
+            # "type": "application/octet-stream",
+            "name": file_name,
         }
         files = {
             "qqfile": file
         }
 
         # Upload the file to the predefined folder
-        r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
-
-        return r.status_code == str(200) and json.loads(r.content)["success"]
+        r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, 
+            headers=headers, params=params, data=form_data, files=files)
+        # return json.loads(r.content), r.status_code
+        return r.status_code == 200 and json.loads(r.content)["success"]
 
     def delete_file(self, project_id, project_infos, file_name):
         """
