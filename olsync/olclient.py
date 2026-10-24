@@ -12,9 +12,18 @@
 import requests as reqs
 from bs4 import BeautifulSoup
 import json
+import ssl
 import uuid
+import websocket
 from socketIO_client import SocketIO
 import time
+
+# socketIO_client/transports.py has `except websocket.SSLError`, an attribute
+# recent websocket-client (1.9.0+) no longer exposes; that raises AttributeError
+# and masks whatever the actual connection error is. Keep this shim for as long
+# as we depend on socketIO-client.
+if not hasattr(websocket, "SSLError"):
+    websocket.SSLError = ssl.SSLError
 
 # Where to get the CSRF Token and where to send the login request to
 LOGIN_URL = "https://www.overleaf.com/login"
@@ -155,8 +164,11 @@ class OverleafClient(object):
 
         if r.ok:
             return json.loads(r.content)
-        elif r.status_code == str(400):
-            # Folder already exists
+        elif r.status_code == 400:
+            # Folder already exists. status_code is an int; comparing to
+            # str(400) was always False, so this branch never actually
+            # fired -- a real folder-exists response fell through to the
+            # HTTPError below instead of silently continuing.
             return
         else:
             raise reqs.HTTPError()
@@ -172,23 +184,50 @@ class OverleafClient(object):
         """
         project_infos = None
 
-        # Callback function for the joinProject emitter
-        def set_project_infos(a, project_infos_dict, c, d):
-            # Set project_infos variable in outer scope
+        # Callback for the joinProjectResponse event the server pushes right
+        # after a successful connect+auto-join (see below) -- delivered as a
+        # plain named event, not as an ack to an explicit emit, and shaped as
+        # {"publicId": ..., "project": {...}}. Downstream code (upload_file,
+        # delete_file) indexes project_infos['rootFolder'][0][...] directly,
+        # so unwrap to the inner "project" dict here rather than returning
+        # the wrapper.
+        def set_project_infos(data):
             nonlocal project_infos
-            project_infos = project_infos_dict
+            project_infos = data.get('project')
 
-        # Convert cookie from CookieJar to string
-        cookie = "GCLB={}; overleaf_session2={}" \
-            .format(
-            self._cookie["GCLB"],
-            self._cookie["overleaf_session2"]
+        # The Socket.IO handshake below (done again internally by the SocketIO()
+        # constructor) has Overleaf issue a *fresh* load-balancer affinity cookie
+        # (currently named GCLB, see olbrowserlogin.COOKIE_NAMES and commit
+        # 0cc61e7) on its response -- but socketIO_client calls requests.get()
+        # directly rather than through a Session, so that Set-Cookie is silently
+        # dropped, and the WebSocket upgrade that follows then 502s without it.
+        # Perform the same handshake ourselves first, purely to capture that
+        # cookie, and merge it into the header used for the real connection.
+        # (Built from whatever cookies are present rather than hardcoded names:
+        # a session may not carry every cookie -- this previously raised
+        # KeyError here even though overleaf_session2 alone is enough to connect.)
+        handshake = reqs.get(
+            "{}/socket.io/1/".format(BASE_URL),
+            params={"t": int(time.time() * 1000)},
+            cookies=self._cookie,
+        )
+        cookie_dict = dict(self._cookie)
+        cookie_dict.update(handshake.cookies.get_dict())
+        cookie = "; ".join(
+            "{}={}".format(name, value) for name, value in cookie_dict.items()
         )
 
-        # Connect to Overleaf Socket.IO, send a time parameter and the cookies
+        # projectId must be a query parameter on THIS handshake -- the one
+        # socketIO_client performs internally when SocketIO() connects, not
+        # the pre-fetch above. Overleaf now binds the session to a project at
+        # handshake time and rejects the connection otherwise
+        # (connectionRejected: "missing/bad ?projectId=... query flag on
+        # handshake"); confirmed it rejects even when projectId is only on
+        # the WebSocket upgrade URL -- it must be on the initial
+        # /socket.io/1/ GET specifically.
         socket_io = SocketIO(
             BASE_URL,
-            params={'t': int(time.time())},
+            params={'t': int(time.time()), 'projectId': project_id},
             headers={'Cookie': cookie}
         )
 
@@ -196,9 +235,19 @@ class OverleafClient(object):
         socket_io.on('connect', lambda: None)
         socket_io.wait_for_callbacks()
 
-        # Send the joinProject event and receive the project infos
-        socket_io.emit('joinProject', {'project_id': project_id}, set_project_infos)
-        socket_io.wait_for_callbacks()
+        # With projectId on the handshake, the server auto-joins and pushes
+        # the result as a joinProjectResponse event -- no explicit joinProject
+        # emit needed (confirmed live: the emit's ack callback never fires
+        # since the server responds with a named event, not an ack).
+        # wait_for_callbacks() only waits for a pending *ack* callback, which
+        # .on() never registers -- it would return immediately without
+        # reading anything. Wait in short slices instead, stopping as soon as
+        # the event has actually been processed.
+        socket_io.on('joinProjectResponse', set_project_infos)
+        for _ in range(20):
+            if project_infos is not None:
+                break
+            socket_io.wait(seconds=1)
 
         # Disconnect from the socket if still connected
         if socket_io.connected:
@@ -250,13 +299,26 @@ class OverleafClient(object):
             "qqtotalfilesize": file_size,
         }
         files = {
+            # Overleaf's upload endpoint now rejects the request with 422
+            # {"success":false,"error":"invalid_filename"} unless the
+            # filename is also present as a plain multipart field, not just
+            # in qqfilename above. Confirmed live: identical request without
+            # this field gets 422; with it, 200 and the file is actually
+            # updated. It must be the bare file name: Overleaf rejects names
+            # containing "/" (SafePath), the folder is chosen via folder_id.
+            "name": (None, file_name.split(PATH_SEP)[-1]),
             "qqfile": file
         }
 
         # Upload the file to the predefined folder
         r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
 
-        return r.status_code == str(200) and json.loads(r.content)["success"]
+        # status_code is an int; comparing to str(200) was always False here,
+        # so this reported failure on every call regardless of the real
+        # result. Harmless today only because callers don't check the return
+        # value, but worth fixing since it's the only signal this method
+        # gives back.
+        return r.status_code == 200 and json.loads(r.content)["success"]
 
     def delete_file(self, project_id, project_infos, file_name):
         """
@@ -297,7 +359,10 @@ class OverleafClient(object):
 
         r = reqs.delete(DELETE_URL.format(project_id, file['_id']), cookies=self._cookie, headers=headers, json={})
 
-        return r.status_code == str(204)
+        # status_code is an int; comparing to str(204) was always False
+        # regardless of the real result, same bug class as upload_file and
+        # create_folder above.
+        return r.status_code == 204
 
     def download_pdf(self, project_id):
         """

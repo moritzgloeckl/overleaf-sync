@@ -67,15 +67,12 @@ def test_upload_into_missing_folder_creates_it_first(rsps, client):
     assert query(rsps.calls[1])["folder_id"] == "f9"
 
 
-@pytest.mark.xfail(reason="#49/#77: Overleaf now requires a multipart `name` field, and rejects '/' in it "
-                          "(fixed by #85 plus basename fix-up)")
 def test_upload_sends_basename_as_name_field(rsps, client):
     upload_ok(rsps)
     client.upload_file("p1", project_infos(folders=[folder("f1", "figures")]), "figures/a.png", 3, b"abc")
     assert b'name="name"\r\n\r\na.png\r\n' in rsps.calls[0].request.body
 
 
-@pytest.mark.xfail(reason="status_code is compared to str(200), so success is never reported (fixed by #85)")
 def test_upload_returns_true_on_success(rsps, client):
     upload_ok(rsps)
     assert client.upload_file("p1", project_infos(), "main.tex", 3, b"abc") is True
@@ -94,7 +91,6 @@ def test_create_folder_returns_new_folder(rsps, client):
     assert client.create_folder("p1", "root", "figs")["_id"] == "f1"
 
 
-@pytest.mark.xfail(reason="status_code is compared to str(400), so 'folder exists' raises (fixed by #85)")
 def test_create_folder_returns_none_if_folder_exists(rsps, client):
     rsps.add(responses.POST, f"{BASE}/project/p1/folder", status=400)
     assert client.create_folder("p1", "root", "figs") is None
@@ -125,7 +121,6 @@ def test_delete_unknown_file_returns_false_without_request(rsps, client):
     assert client.delete_file("p1", project_infos(), "missing.tex") is False
 
 
-@pytest.mark.xfail(reason="status_code is compared to str(204), so success is never reported (fixed by #85)")
 def test_delete_returns_true_on_success(rsps, client):
     rsps.add(responses.DELETE, f"{BASE}/project/p1/doc/d1", status=204)
     assert client.delete_file("p1", project_infos(root_docs=[{"_id": "d1", "name": "main.tex"}]), "main.tex")
