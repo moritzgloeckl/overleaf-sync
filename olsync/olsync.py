@@ -24,11 +24,9 @@ from pathlib import Path
 try:
     # Import for pip installation / wheel
     from olsync.olclient import OverleafClient
-    import olsync.olbrowserlogin as olbrowserlogin
 except ImportError:
     # Import for development
     from olclient import OverleafClient
-    import olbrowserlogin
 
 
 @click.group(invoke_without_command=True)
@@ -126,8 +124,9 @@ def login(cookie_path, verbose):
     if os.path.isfile(cookie_path) and not click.confirm(
             'Persisted Overleaf cookie already exist. Do you want to override it?'):
         return
+    olbrowserlogin = load_browser_login()
     click.clear()
-    execute_action(lambda: login_handler(cookie_path), "Login",
+    execute_action(lambda: login_handler(olbrowserlogin, cookie_path), "Login",
                    "Login successful. Cookie persisted as `" + click.format_filename(
                        cookie_path) + "`. You may now sync your project.",
                    "Login failed. Please try again.", verbose)
@@ -203,7 +202,29 @@ def download_pdf(project_name, download_path, cookie_path, verbose):
                    "Downloading project's PDF failed. Please try again.", verbose)
 
 
-def login_handler(path):
+def load_browser_login():
+    """
+    Import the login window module. PySide6 is an optional dependency (the "gui" extra),
+    so it is only imported when logging in.
+    """
+    try:
+        try:
+            # Import for pip installation / wheel
+            import olsync.olbrowserlogin as olbrowserlogin
+        except ImportError as e:
+            if (e.name or "").startswith("PySide6"):
+                raise
+            # Import for development
+            import olbrowserlogin
+    except ImportError as e:
+        if not (e.name or "").startswith("PySide6"):
+            raise
+        raise click.ClickException(
+            "The login window needs PySide6. Install it with: pip install \"overleaf-sync[gui]\"")
+    return olbrowserlogin
+
+
+def login_handler(olbrowserlogin, path):
     store = olbrowserlogin.login()
     if store is None:
         return False
