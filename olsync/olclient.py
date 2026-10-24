@@ -18,11 +18,10 @@ import websocket
 from socketIO_client import SocketIO
 import time
 
-# DIAGNOSTIC ONLY -- not part of the real fix, will be removed or replaced.
 # socketIO_client/transports.py has `except websocket.SSLError`, an attribute
 # recent websocket-client (1.9.0+) no longer exposes; that raises AttributeError
-# and masks whatever the actual connection error is. Shim it so the real error
-# can be seen.
+# and masks whatever the actual connection error is. Keep this shim for as long
+# as we depend on socketIO-client.
 if not hasattr(websocket, "SSLError"):
     websocket.SSLError = ssl.SSLError
 
@@ -288,8 +287,9 @@ class OverleafClient(object):
             # filename is also present as a plain multipart field, not just
             # in qqfilename above. Confirmed live: identical request without
             # this field gets 422; with it, 200 and the file is actually
-            # updated.
-            "name": (None, file_name),
+            # updated. It must be the bare file name: Overleaf rejects names
+            # containing "/" (SafePath), the folder is chosen via folder_id.
+            "name": (None, file_name.split(PATH_SEP)[-1]),
             "qqfile": file
         }
 
