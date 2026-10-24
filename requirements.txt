@@ -1,7 +1,0 @@
-requests==2.*
-beautifulsoup4==4.11.1
-yaspin==2.*
-python-dateutil~=2.8.1
-click==8.*
-socketIO-client==0.5.7.2 # Do not upgrade!
-PySide6==6.*
