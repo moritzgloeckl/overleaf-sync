@@ -137,10 +137,23 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 @main.command()
 @click.option('--path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Path to store the persisted Overleaf cookie.")
+@click.option('--cookie', 'use_cookie', is_flag=True,
+              help="Log in without the login window, using the `overleaf_session2` cookie from a browser that is "
+                   "logged in to Overleaf (asked for at a hidden prompt, or read from OLSYNC_COOKIE). Useful on "
+                   "servers without a display and for single sign-on accounts.")
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-def login(cookie_path, verbose):
+def login(cookie_path, use_cookie, verbose):
     if os.path.isfile(cookie_path) and not click.confirm(
             'Persisted Overleaf cookie already exist. Do you want to override it?'):
+        return
+    if use_cookie:
+        # Never accept the cookie as a command line argument, it would end up in the shell history
+        cookie = os.environ.get("OLSYNC_COOKIE") or click.prompt("Value of the overleaf_session2 cookie",
+                                                                 hide_input=True)
+        execute_action(lambda: cookie_login_handler(cookie.strip(), cookie_path), "Login",
+                       "Login successful. Cookie persisted as `" + click.format_filename(
+                           cookie_path) + "`. You may now sync your project.",
+                       "Login failed: the cookie is not valid (expired, or copied incompletely).", verbose)
         return
     olbrowserlogin = load_browser_login()
     click.clear()
@@ -230,15 +243,22 @@ def load_browser_login():
             # Import for pip installation / wheel
             import olsync.olbrowserlogin as olbrowserlogin
         except ImportError as e:
-            if (e.name or "").startswith("PySide6"):
+            if not (e.name or "").startswith("olsync"):
                 raise
-            # Import for development
+            # Import for development (running olsync.py from inside the olsync folder)
             import olbrowserlogin
     except ImportError as e:
-        if not (e.name or "").startswith("PySide6"):
-            raise
+        if (e.name or "").startswith("PySide6"):
+            raise click.ClickException(
+                "The login window needs PySide6. Install it with: pip install \"overleaf-sync[gui]\"\n"
+                "Alternatively, log in without the window: ols login --cookie")
+        # PySide6 is installed but can't be loaded, e.g. because another Qt installation (such as Anaconda's)
+        # conflicts with it (#59)
         raise click.ClickException(
-            "The login window needs PySide6. Install it with: pip install \"overleaf-sync[gui]\"")
+            f"The login window could not be loaded: {e}\n"
+            "This usually means another Qt installation (e.g. from Anaconda) conflicts with PySide6. Installing "
+            "overleaf-sync into a fresh virtual environment based on a non-conda Python usually helps.\n"
+            "Alternatively, log in without the window: ols login --cookie")
     return olbrowserlogin
 
 
@@ -248,6 +268,16 @@ def login_handler(olbrowserlogin, path):
         return False
     with open(path, 'wb+') as f:
         pickle.dump(store, f)
+    return True
+
+
+def cookie_login_handler(cookie, path):
+    cookies = {"overleaf_session2": cookie}
+    csrf = OverleafClient(cookies).fetch_csrf()
+    if csrf is None:
+        return False
+    with open(path, 'wb+') as f:
+        pickle.dump({"cookie": cookies, "csrf": csrf}, f)
     return True
 
 

@@ -45,6 +45,15 @@ It then stores your *cookie* (**not** your login credentials) in a hidden file c
 
 Keep the `.olauth` file save, as it can be used to log in into your account.
 
+#### Login without the login window
+On a server without a display, or if the login window doesn't work for your account (e.g. single sign-on via ORCID or your institution), log in with a session cookie instead:
+
+1. Log in to Overleaf in your normal browser.
+2. Open the developer tools → Application (Firefox: Storage) → Cookies → `https://www.overleaf.com` and copy the value of `overleaf_session2`.
+3. Run `ols login --cookie` and paste the value at the (hidden) prompt, or provide it via the `OLSYNC_COOKIE` environment variable.
+
+This works without installing the `gui` extra.
+
 ### Listing all projects
 ```
 moritz@github:~/test$ ols list [--store-path -v/--verbose]
