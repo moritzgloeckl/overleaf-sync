@@ -125,13 +125,14 @@ def test_olignore_excludes_local_files_from_upload(workdir):
     assert [name for name, _ in FakeClient.instances[0].uploaded] == ["main.tex"]
 
 
-@pytest.mark.xfail(reason="#60: olignore_keep_list runs (and prints its notice) once per remote file")
-def test_olignore_notice_is_printed_once(workdir):
+@pytest.mark.parametrize("mode", [["-l"], ["-r"], []], ids=["local-only", "remote-only", "two-way"])
+def test_olignore_notice_is_printed_once(workdir, mode):
+    # #60: olignore_keep_list ran (and printed its notice) once per remote file
     (workdir / ".olignore").write_text("*.log\n")
     FakeClient.remote = {f"f{i}.tex": b"x" for i in range(5)}
     for i in range(5):
         (workdir / f"f{i}.tex").write_bytes(b"x")
-    result = run("-l")
+    result = run(*mode)
     assert result.output.count(".olignore: using") == 1
 
 
