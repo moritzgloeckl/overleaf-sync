@@ -380,7 +380,7 @@ class OverleafClient(object):
             "check": "silent",
             "draft": False,
             "incrementalCompilesEnabled": True,
-            "rootDoc_id": "",
+            # No rootDoc_id: Overleaf validates it as an optional ObjectId and rejects "" (400)
             "stopOnFirstError": False
         }
 
@@ -396,7 +396,15 @@ class OverleafClient(object):
 
         pdf_file = next(v for v in compile_result['outputFiles'] if v['type'] == 'pdf')
 
-        download_req = reqs.get(BASE_URL + pdf_file['url'], cookies=self._cookie, headers=headers)
+        # The output is only served (otherwise 404) when the compile group and CLSI server are passed along,
+        # like Overleaf's own frontend does. Self-hosted servers may not send them.
+        params = {}
+        if compile_result.get("compileGroup"):
+            params["compileGroup"] = compile_result["compileGroup"]
+        if compile_result.get("clsiServerId"):
+            params["clsiserverid"] = compile_result["clsiServerId"]
+
+        download_req = reqs.get(BASE_URL + pdf_file['url'], cookies=self._cookie, headers=headers, params=params)
 
         if download_req.ok:
             return pdf_file['path'], download_req.content

@@ -145,6 +145,29 @@ def test_download_pdf_compiles_then_fetches_output(rsps, client):
     assert client.download_pdf("p1") == ("output.pdf", b"%PDF-1.5")
 
 
+def test_download_pdf_does_not_send_an_empty_root_doc_id(rsps, client):
+    # #83: overleaf.com validates rootDoc_id as an optional ObjectId; "" is rejected with 400
+    rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={"status": "failure", "outputFiles": []})
+    with pytest.raises(requests.HTTPError):
+        client.download_pdf("p1")
+    assert json.loads(rsps.calls[0].request.body).get("rootDoc_id") is None
+
+
+def test_download_pdf_passes_compile_group_and_clsi_server_id(rsps, client):
+    # #83: overleaf.com answers the output URL with 404 unless compileGroup and clsiserverid are passed along
+    rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={
+        "status": "success",
+        "compileGroup": "standard",
+        "clsiServerId": "clsi-123",
+        "pdfDownloadDomain": "https://compiles.example.com/zone/b",
+        "outputFiles": [{"type": "pdf", "path": "output.pdf", "build": "b1",
+                         "url": "/project/p1/user/u1/build/b1/output/output.pdf"}],
+    })
+    rsps.add(responses.GET, f"{BASE}/project/p1/user/u1/build/b1/output/output.pdf", body=b"%PDF-1.5",
+             match=[responses.matchers.query_param_matcher({"compileGroup": "standard", "clsiserverid": "clsi-123"})])
+    assert client.download_pdf("p1") == ("output.pdf", b"%PDF-1.5")
+
+
 def test_download_pdf_raises_if_compile_fails(rsps, client):
     rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={"status": "failure", "outputFiles": []})
     with pytest.raises(requests.HTTPError):

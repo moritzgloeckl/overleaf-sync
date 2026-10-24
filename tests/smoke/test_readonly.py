@@ -24,3 +24,10 @@ def test_project_infos_have_a_root_folder(smoke_client, smoke_project):
 def test_project_zip_download(smoke_client, smoke_project):
     names = zipfile.ZipFile(io.BytesIO(smoke_client.download_project(smoke_project["id"]))).namelist()
     assert "main.tex" in names
+
+
+def test_compile_and_download_pdf(smoke_client, smoke_project):
+    # The only compile per smoke run (Overleaf rate-limits compiles)
+    file_name, content = smoke_client.download_pdf(smoke_project["id"])
+    assert file_name.endswith(".pdf")
+    assert content.startswith(b"%PDF-")
