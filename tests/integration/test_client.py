@@ -39,7 +39,8 @@ def test_upload_into_new_nested_folders(ce_client, ce_project, ce_tree, ce_conte
     infos = ce_client.get_project_infos(ce_project["id"])
     assert upload(ce_client, ce_project, infos, "chapters/part1/intro.tex", b"% intro\n") is True
     tree = ce_tree()
-    assert tree["chapters/"][0] == "folder" and tree["chapters/part1/"][0] == "folder"
+    assert tree["chapters/"][0] == "folder"
+    assert tree["chapters/part1/"][0] == "folder"
     assert ce_content(tree["chapters/part1/intro.tex"]) == b"% intro\n"
 
 

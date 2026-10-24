@@ -24,6 +24,8 @@ jobs:
       - run: ruff check .
 
   unit:
+    # Bounded, so a regression that hangs (e.g. the real-time reconnect loop) fails instead of running for hours
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
