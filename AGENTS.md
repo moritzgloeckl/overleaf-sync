@@ -25,9 +25,9 @@ Tests use pytest. `pytest` runs unit tests only; `-m integration` and `-m smoke`
 
 - **Login** (`olbrowserlogin.py`): opens a Qt WebEngine window on the Overleaf login page. Once the URL becomes `https://www.overleaf.com/project`, it grabs the `overleaf_session2` and `GCLB` cookies plus the CSRF token from the `ol-csrfToken` meta tag. `olsync.login_handler` pickles `{"cookie": ..., "csrf": ...}` to `.olauth` (path configurable). Credentials are never handled by this tool. `.olauth` is read back with `pickle.load`, so never load an untrusted one. `OverleafClient.login(username, password)` is dead code (broken by captchas); don't revive it.
 - **Client** (`olclient.py`):
-  - Projects are read by scraping the `ol-projects` meta tag on the dashboard; archived/trashed projects are filtered out. Projects are matched by exact name.
-  - The project file tree (folder/doc IDs) comes from a Socket.IO `joinProject` event (`get_project_infos`), using `socketIO-client==0.5.7.2`. The pin is marked "Do not upgrade" in `pyproject.toml` (presumably because newer clients speak a protocol Overleaf rejects); leave it alone. `get_project_infos` needs both `GCLB` and `overleaf_session2` in the stored cookie and fails with a `KeyError` (only visible with `-v`) if either is missing.
-  - Download = project zip; upload = multipart POST per file (creating missing folders first, case-insensitive folder match); PDF = trigger compile, then fetch the first `pdf` output file.
+  - Projects are read by scraping the `ol-prefetchedProjectsBlob` meta tag on the dashboard (`{totalSize, projects}`; the old `ol-projects` tag is a fallback); archived/trashed projects are filtered out. Projects are matched by exact name.
+  - The project file tree (folder/doc IDs) comes from Overleaf's real-time service (`get_project_infos`), using `socketIO-client==0.5.7.2` (Socket.IO 0.9 protocol at `/socket.io/1/`; keep the pin). The handshake must carry `?projectId=...`; the server then pushes a `joinProjectResponse` event. A preliminary handshake request captures the fresh `GCLB` load-balancer cookie, and a module-level shim restores `websocket.SSLError` for newer `websocket-client` versions.
+  - Download = project zip; upload = multipart POST per file (creating missing folders first, case-insensitive folder match; the `name` field must be the bare file name, Overleaf rejects `/`); PDF = trigger compile, then fetch the first `pdf` output file.
   - Delete only searches the `docs` lists of the tree and calls the `/doc/{id}` URL. Binary files (images, PDFs) are most likely listed elsewhere in Overleaf's tree (`fileRefs`), so they probably can't be deleted remotely, and the CLI still lists them under `[DELETE]` without reporting the failure.
   - All Overleaf URLs are module-level constants at the top of `olclient.py`.
 - **Sync** (`olsync.py`): `main` does `os.chdir(sync_path)` (all paths after that are relative to the CWD), downloads the project zip once and calls the generic `sync_func` once or twice (remote→local, then local→remote) with lambdas for create/delete/compare.
@@ -62,18 +62,13 @@ Almost everything else needs a real Overleaf account and network access: run `ol
 
 ## Releasing
 
-Version bumps touch four files; keep them in sync (each module has an MIT header block with a `Version:` line):
-- `olsync/__init__.py` (`__version__`)
-- the `Version:` header in `olsync/olsync.py`, `olsync/olclient.py`, `olsync/olbrowserlogin.py`
+The version lives only in `olsync/__init__.py` (`__version__`); flit reads it from there and `release.yml` checks that the tag matches it.
 
 Dependencies live only in `pyproject.toml`.
 
-Build with `pip wheel --no-deps -w dist .` or `python -m build` (backend `flit_core >=3.4,<4`). Automated releases via GitHub Actions are planned.
+Build locally with `python -m build` (backend `flit_core >=3.4,<4`). Releases are automated: pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`, which publishes to PyPI via Trusted Publishing after the maintainer approves the `pypi` environment (restricted to `v*` tags). A manual run of the workflow publishes to TestPyPI.
 
 ## Known gotchas
 
-- `olclient.py` compares `r.status_code == str(200)` / `str(400)` / `str(204)`. `status_code` is an `int`, so these checks are always `False`:
-  - `upload_file` and `delete_file` always return `False` (callers currently ignore it);
-  - `create_folder` raises `HTTPError` on "folder already exists" (400) instead of returning `None`. Even if it returned `None`, `upload_file` would crash on `new_folder['_id']`.
 - `olsync.py` calls `olignore_keep_list()` inside the `-l` deletion list comprehension, i.e. once per zip entry, re-globbing the tree and re-printing the `.olignore` notice each time. Hoist it if you touch that code.
 - Overleaf may take 1–2 minutes before remote edits show up in the downloaded zip / `lastUpdated` (see README "Known Bugs").

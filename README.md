@@ -16,13 +16,15 @@ This tool provides an easy way to synchronize Overleaf projects from and to your
 
 ## How To Use
 ### Install
-The package is available via [PyPI](https://pypi.org/project/overleaf-sync/). Just run:
+The package is available via [PyPI](https://pypi.org/project/overleaf-sync/) and needs Python 3.11 or newer. Install it including the login window (`gui` extra):
 
 ```
-moritz@github:~/test$ pip3 install overleaf-sync
+moritz@github:~/test$ pip3 install "overleaf-sync[gui]"
 ```
 
-That's it! Depending on your local Python installation, you might need to use `pip` instead of `pip3`.
+Depending on your local Python installation, you might need to use `pip` instead of `pip3`. [pipx](https://pipx.pypa.io/) works too: `pipx install "overleaf-sync[gui]"`.
+
+> **2.0 pre-release:** Overleaf changed its website in a way that broke version 1.2.0. The fixes are available as a pre-release: `pip3 install --pre "overleaf-sync[gui]"`. Please report any problems in the [issues](https://github.com/moritzgloeckl/overleaf-sync/issues).
 
 ### Prerequisites
 - Create your project on [Overleaf](https://www.overleaf.com/project), for example a project named `test`. Overleaf-sync is not able to create projects (yet).
@@ -37,7 +39,7 @@ moritz@github:~/test$ ols login [--path]
 Login successful. Cookie persisted as `.olauth`. You may now sync your project.
 ```
 
-Logging in will be handled by a mini web browser opening on your device (using Qt5). You can then enter your username and password securely on the official Overleaf website. You might get asked to solve a CAPTCHA in the process. Your credentials are sent to Overleaf over HTTPS.
+Logging in will be handled by a mini web browser opening on your device (using Qt via PySide6, from the `gui` extra). You can then enter your username and password securely on the official Overleaf website. You might get asked to solve a CAPTCHA in the process. Your credentials are sent to Overleaf over HTTPS.
 
 It then stores your *cookie* (**not** your login credentials) in a hidden file called `.olauth` in the same folder you run the command from. It is possible to store the cookie elsewhere using the `--path` option. The cookie file will not be synced to or from Overleaf.
 
