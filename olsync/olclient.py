@@ -82,14 +82,32 @@ class OverleafClient(object):
 
             return {"cookie": self._cookie, "csrf": self._csrf}
 
+    @staticmethod
+    def _extract_projects(page_content):
+        """
+        Extract the project list from the Overleaf dashboard page.
+
+        Overleaf used to embed the list as a bare JSON array in a
+        <meta name="ol-projects"> tag. It now embeds
+        {"totalSize": N, "projects": [...]} in a
+        <meta name="ol-prefetchedProjectsBlob"> tag instead. Support both so
+        this keeps working if Overleaf reverts or if an older cookie/page is
+        cached somewhere.
+        """
+        soup = BeautifulSoup(page_content, 'html.parser')
+        tag = soup.find('meta', {'name': 'ol-prefetchedProjectsBlob'}) or soup.find('meta', {'name': 'ol-projects'})
+        json_content = json.loads(tag.get('content'))
+        if isinstance(json_content, dict):
+            json_content = json_content.get('projects', [])
+        return json_content
+
     def all_projects(self):
         """
         Get all of a user's active projects (= not archived and not trashed)
         Returns: List of project objects
         """
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
-        json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
+        json_content = OverleafClient._extract_projects(projects_page.content)
         return list(OverleafClient.filter_projects(json_content))
 
     def get_project(self, project_name):
@@ -100,8 +118,7 @@ class OverleafClient(object):
         """
 
         projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
-        json_content = json.loads(
-            BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-projects'}).get('content'))
+        json_content = OverleafClient._extract_projects(projects_page.content)
         return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
     def download_project(self, project_id):

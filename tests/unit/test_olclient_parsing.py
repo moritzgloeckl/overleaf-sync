@@ -37,13 +37,11 @@ def test_get_project_old_dashboard(dashboard):
     assert OverleafClient({}, "csrf").get_project("Thesis")["id"] == "p1"
 
 
-@pytest.mark.xfail(reason="#32/#63/#75: Overleaf renamed the meta tag to ol-prefetchedProjectsBlob (fixed by #84)")
 def test_all_projects_2026_dashboard(dashboard):
     dashboard("dashboard_2026.html")
     assert sorted(p["name"] for p in OverleafClient({}, "csrf").all_projects()) == ["Paper", "Thesis"]
 
 
-@pytest.mark.xfail(reason="#32/#63/#75: Overleaf renamed the meta tag to ol-prefetchedProjectsBlob (fixed by #84)")
 def test_get_project_2026_dashboard(dashboard):
     dashboard("dashboard_2026.html")
     assert OverleafClient({}, "csrf").get_project("Thesis")["id"] == "p1"
