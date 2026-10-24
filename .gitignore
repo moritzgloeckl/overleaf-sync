@@ -113,6 +113,6 @@ venv.bak/
 
 # dev testing
 setup.py
-test*
-.olauth
+.olauth*
 .olignore
+.olsync-state.json
