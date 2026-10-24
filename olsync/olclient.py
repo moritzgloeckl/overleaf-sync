@@ -118,7 +118,9 @@ class OverleafClient(object):
         if not projects_page.ok or projects_page.is_redirect:
             return None
         csrf_tag = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'})
-        return csrf_tag.get('content') if csrf_tag is not None else None
+        if csrf_tag is None:
+            return None
+        return csrf_tag.get('content')
 
     def all_projects(self):
         """
