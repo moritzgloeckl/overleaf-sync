@@ -109,6 +109,17 @@ class OverleafClient(object):
             json_content = json_content.get('projects', [])
         return json_content
 
+    def fetch_csrf(self):
+        """
+        Get the CSRF token from the project dashboard, e.g. after logging in with a cookie copied from a browser
+        Returns: the CSRF token, or None if the session cookie is not (or no longer) valid
+        """
+        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie, allow_redirects=False)
+        if not projects_page.ok or projects_page.is_redirect:
+            return None
+        csrf_tag = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'})
+        return csrf_tag.get('content') if csrf_tag else None
+
     def all_projects(self):
         """
         Get all of a user's active projects (= not archived and not trashed)
