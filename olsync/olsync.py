@@ -238,15 +238,22 @@ def load_browser_login():
             # Import for pip installation / wheel
             import olsync.olbrowserlogin as olbrowserlogin
         except ImportError as e:
-            if (e.name or "").startswith("PySide6"):
+            if not (e.name or "").startswith("olsync"):
                 raise
-            # Import for development
+            # Import for development (running olsync.py from inside the olsync folder)
             import olbrowserlogin
     except ImportError as e:
-        if not (e.name or "").startswith("PySide6"):
-            raise
+        if (e.name or "").startswith("PySide6"):
+            raise click.ClickException(
+                "The login window needs PySide6. Install it with: pip install \"overleaf-sync[gui]\"\n"
+                "Alternatively, log in without the window: ols login --cookie")
+        # PySide6 is installed but can't be loaded, e.g. because another Qt installation (such as Anaconda's)
+        # conflicts with it (#59)
         raise click.ClickException(
-            "The login window needs PySide6. Install it with: pip install \"overleaf-sync[gui]\"")
+            f"The login window could not be loaded: {e}\n"
+            "This usually means another Qt installation (e.g. from Anaconda) conflicts with PySide6. Installing "
+            "overleaf-sync into a fresh virtual environment based on a non-conda Python usually helps.\n"
+            "Alternatively, log in without the window: ols login --cookie")
     return olbrowserlogin
 
 
