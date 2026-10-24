@@ -4,7 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [2.0.0a1] - unreleased
+## [2.0.0a2] - unreleased
+
+Second pre-release of 2.0, with the fixes found while re-testing all open issues against 2.0.0a1.
+
+### Added
+- `ols login --cookie`: log in with the `overleaf_session2` cookie from your browser instead of the login window
+  (hidden prompt or `OLSYNC_COOKIE`). Works without PySide6, e.g. on servers without a display (#80), on systems
+  where PySide6 can't be installed such as Ubuntu 18.04 (#74), and for single sign-on accounts such as ORCID (#83).
+
+### Fixed
+- `ols download`: Overleaf rejected the compile request and served the PDF only with additional parameters (#83).
+- Deleting files on Overleaf with `ols -l`: binary files (images, PDFs) were reported as deleted but stayed on
+  Overleaf, and a same-named file in a parent folder could be deleted instead of a file in a missing subfolder (#77).
+- When the login window can't be loaded (e.g. Qt conflicts with Anaconda on Windows), the real error is shown with
+  a hint, instead of a misleading `No module named 'olbrowserlogin'` (#59).
+- The `.olignore` notice was printed once per file instead of once per sync (#60).
+- `.olignore` patterns starting with `./` never matched (#72).
+
+## [2.0.0a1] - 2026-10-24
 
 First pre-release of 2.0. Overleaf changed its website in ways that broke 1.2.0 for everyone; this release makes
 syncing work again and puts the project on a tested footing.
@@ -37,5 +55,6 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[2.0.0a2]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a1...v2.0.0a2
 [2.0.0a1]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0a1
 [1.2.0]: https://pypi.org/project/overleaf-sync/1.2.0/
