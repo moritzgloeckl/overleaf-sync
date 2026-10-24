@@ -98,9 +98,11 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
         sync = not (local or remote)
 
         if remote or sync:
+            remote_files = zip_file.namelist()
+            deleted_files = [] if sync else [f for f in olignore_keep_list(olignore_path) if f not in remote_files]
             sync_func(
-                files_from=zip_file.namelist(),
-                deleted_files=[f for f in olignore_keep_list(olignore_path) if f not in zip_file.namelist() and not sync],
+                files_from=remote_files,
+                deleted_files=deleted_files,
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
                 delete_file_at_to=lambda name: delete_file(name),
                 create_file_at_from=lambda name: overleaf_client.upload_file(
@@ -113,9 +115,12 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
                 to_name="local",
                 verbose=verbose)
         if local or sync:
+            # Computed once (#60), and after the remote -> local pass so newly downloaded files are included
+            local_files = olignore_keep_list(olignore_path)
+            deleted_files = [] if sync else [f for f in zip_file.namelist() if f not in local_files]
             sync_func(
-                files_from=olignore_keep_list(olignore_path),
-                deleted_files=[f for f in zip_file.namelist() if f not in olignore_keep_list(olignore_path) and not sync],
+                files_from=local_files,
+                deleted_files=deleted_files,
                 create_file_at_to=lambda name: overleaf_client.upload_file(
                     project["id"], project_infos, name, os.path.getsize(name), open(name, 'rb')),
                 delete_file_at_to=lambda name: overleaf_client.delete_file(project["id"], project_infos, name),
