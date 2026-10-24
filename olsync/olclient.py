@@ -24,16 +24,16 @@ import time
 if not hasattr(websocket, "SSLError"):
     websocket.SSLError = ssl.SSLError
 
-# Where to get the CSRF Token and where to send the login request to
-LOGIN_URL = "https://www.overleaf.com/login"
-PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
-# The URL to download all the files in zip format
-DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
-UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
-FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
-DELETE_URL = "https://www.overleaf.com/project/{}/{}/{}"  # The URL to delete files (entity type: doc or file)
-COMPILE_URL = "https://www.overleaf.com/project/{}/compile?enable_pdf_caching=true"  # The URL to compile the project
-BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
+BASE_URL = "https://www.overleaf.com"  # The default Overleaf server; self-hosted servers are passed as base_url
+# Paths relative to the server's base URL
+LOGIN_PATH = "/login"  # Where to get the CSRF Token and where to send the login request to
+PROJECT_PATH = "/project"  # The dashboard
+DOWNLOAD_PATH = "/project/{}/download/zip"  # Download all the files in zip format
+UPLOAD_PATH = "/project/{}/upload"  # Upload files
+FOLDER_PATH = "/project/{}/folder"  # Create folders
+DELETE_PATH = "/project/{}/{}/{}"  # Delete files (entity type: doc or file)
+COMPILE_PATH = "/project/{}/compile?enable_pdf_caching=true"  # Compile the project
+SOCKET_IO_PATH = "/socket.io/1/"  # Real-time service handshake
 PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
 
 class OverleafClient(object):
@@ -51,9 +51,17 @@ class OverleafClient(object):
                 if all(p.get(k) == v for k, v in more_attrs.items()):
                     yield p
 
-    def __init__(self, cookie=None, csrf=None):
+    def __init__(self, cookie=None, csrf=None, base_url=BASE_URL):
         self._cookie = cookie  # Store the cookie for authenticated requests
         self._csrf = csrf  # Store the CSRF token since it is needed for some requests
+        self._base_url = base_url.rstrip("/")  # overleaf.com or a self-hosted server
+
+    @property
+    def base_url(self):
+        return self._base_url
+
+    def _url(self, path):
+        return self._base_url + path
 
     def login(self, username, password):
         """
@@ -63,7 +71,7 @@ class OverleafClient(object):
         Returns: Dict of cookie and CSRF
         """
 
-        get_login = reqs.get(LOGIN_URL)
+        get_login = reqs.get(self._url(LOGIN_PATH))
         self._csrf = BeautifulSoup(get_login.content, 'html.parser').find(
             'input', {'name': '_csrf'}).get('value')
         login_json = {
@@ -71,7 +79,7 @@ class OverleafClient(object):
             "email": username,
             "password": password
         }
-        post_login = reqs.post(LOGIN_URL, json=login_json,
+        post_login = reqs.post(self._url(LOGIN_PATH), json=login_json,
                                cookies=get_login.cookies)
 
         # On a successful authentication the Overleaf API returns a new authenticated cookie.
@@ -84,7 +92,7 @@ class OverleafClient(object):
             self._cookie['GCLB'] = get_login.cookies['GCLB']
 
             # CSRF changes after making the login request, new CSRF token will be on the projects page
-            projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+            projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
             self._csrf = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'}) \
                 .get('content')
 
@@ -114,7 +122,7 @@ class OverleafClient(object):
         Get the CSRF token from the project dashboard, e.g. after logging in with a cookie copied from a browser
         Returns: the CSRF token, or None if the session cookie is not (or no longer) valid
         """
-        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie, allow_redirects=False)
+        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie, allow_redirects=False)
         if not projects_page.ok or projects_page.is_redirect:
             return None
         csrf_tag = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'})
@@ -127,7 +135,7 @@ class OverleafClient(object):
         Get all of a user's active projects (= not archived and not trashed)
         Returns: List of project objects
         """
-        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
         json_content = OverleafClient._extract_projects(projects_page.content)
         return list(OverleafClient.filter_projects(json_content))
 
@@ -138,7 +146,7 @@ class OverleafClient(object):
         Returns: project object
         """
 
-        projects_page = reqs.get(PROJECT_URL, cookies=self._cookie)
+        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
         json_content = OverleafClient._extract_projects(projects_page.content)
         return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
@@ -148,7 +156,7 @@ class OverleafClient(object):
         Params: project_id, the id of the project
         Returns: bytes string (zip file)
         """
-        r = reqs.get(DOWNLOAD_URL.format(project_id),
+        r = reqs.get(self._url(DOWNLOAD_PATH.format(project_id)),
                      stream=True, cookies=self._cookie)
         return r.content
 
@@ -171,7 +179,7 @@ class OverleafClient(object):
         headers = {
             "X-Csrf-Token": self._csrf
         }
-        r = reqs.post(FOLDER_URL.format(project_id),
+        r = reqs.post(self._url(FOLDER_PATH.format(project_id)),
                       cookies=self._cookie, headers=headers, json=params)
 
         if r.ok:
@@ -219,7 +227,7 @@ class OverleafClient(object):
         # a session may not carry every cookie -- this previously raised
         # KeyError here even though overleaf_session2 alone is enough to connect.)
         handshake = reqs.get(
-            "{}/socket.io/1/".format(BASE_URL),
+            self._url(SOCKET_IO_PATH),
             params={"t": int(time.time() * 1000)},
             cookies=self._cookie,
         )
@@ -238,7 +246,7 @@ class OverleafClient(object):
         # the WebSocket upgrade URL -- it must be on the initial
         # /socket.io/1/ GET specifically.
         socket_io = SocketIO(
-            BASE_URL,
+            self._base_url,
             params={'t': int(time.time()), 'projectId': project_id},
             headers={'Cookie': cookie}
         )
@@ -323,7 +331,7 @@ class OverleafClient(object):
         }
 
         # Upload the file to the predefined folder
-        r = reqs.post(UPLOAD_URL.format(project_id), cookies=self._cookie, params=params, files=files)
+        r = reqs.post(self._url(UPLOAD_PATH.format(project_id)), cookies=self._cookie, params=params, files=files)
 
         # status_code is an int; comparing to str(200) was always False here,
         # so this reported failure on every call regardless of the real
@@ -367,7 +375,7 @@ class OverleafClient(object):
             "X-Csrf-Token": self._csrf
         }
 
-        r = reqs.delete(DELETE_URL.format(project_id, entity_type, file['_id']), cookies=self._cookie,
+        r = reqs.delete(self._url(DELETE_PATH.format(project_id, entity_type, file['_id'])), cookies=self._cookie,
                         headers=headers, json={})
 
         # status_code is an int; comparing to str(204) was always False
@@ -396,7 +404,7 @@ class OverleafClient(object):
             "stopOnFirstError": False
         }
 
-        r = reqs.post(COMPILE_URL.format(project_id), cookies=self._cookie, headers=headers, json=body)
+        r = reqs.post(self._url(COMPILE_PATH.format(project_id)), cookies=self._cookie, headers=headers, json=body)
 
         if not r.ok:
             raise reqs.HTTPError()
@@ -416,7 +424,7 @@ class OverleafClient(object):
         if compile_result.get("clsiServerId"):
             params["clsiserverid"] = compile_result["clsiServerId"]
 
-        download_req = reqs.get(BASE_URL + pdf_file['url'], cookies=self._cookie, headers=headers, params=params)
+        download_req = reqs.get(self._url(pdf_file['url']), cookies=self._cookie, headers=headers, params=params)
 
         if download_req.ok:
             return pdf_file['path'], download_req.content
