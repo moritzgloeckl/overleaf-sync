@@ -41,6 +41,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-      - run: pip install build twine
+      - run: 'pip install --only-binary :all: build twine'
       - run: python -m build
       - run: twine check --strict dist/*
