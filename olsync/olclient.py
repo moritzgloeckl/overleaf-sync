@@ -36,6 +36,20 @@ COMPILE_PATH = "/project/{}/compile?enable_pdf_caching=true"  # Compile the proj
 SOCKET_IO_PATH = "/socket.io/1/"  # Real-time service handshake
 PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
 
+class RealtimeSocket(SocketIO):
+    """
+    socketIO-client's SocketIO, minus its cleanup quirk: SocketIO.__del__ calls disconnect(), which opens a brand-new
+    connection when the old one is already closed (and, with wait_for_connection=True, retries that forever).
+    """
+
+    def __del__(self):
+        try:
+            if self.connected:
+                self.disconnect()
+        except Exception:
+            pass
+
+
 class OverleafClient(object):
     """
     Overleaf API Wrapper
@@ -245,10 +259,12 @@ class OverleafClient(object):
         # handshake"); confirmed it rejects even when projectId is only on
         # the WebSocket upgrade URL -- it must be on the initial
         # /socket.io/1/ GET specifically.
-        socket_io = SocketIO(
+        socket_io = RealtimeSocket(
             self._base_url,
             params={'t': int(time.time()), 'projectId': project_id},
-            headers={'Cookie': cookie}
+            headers={'Cookie': cookie},
+            # Fail instead of retrying forever (and hanging the CLI) when the real-time service is unreachable
+            wait_for_connection=False
         )
 
         # Wait until we connect to the socket
@@ -263,15 +279,16 @@ class OverleafClient(object):
         # .on() never registers -- it would return immediately without
         # reading anything. Wait in short slices instead, stopping as soon as
         # the event has actually been processed.
-        socket_io.on('joinProjectResponse', set_project_infos)
-        for _ in range(20):
-            if project_infos is not None:
-                break
-            socket_io.wait(seconds=1)
-
-        # Disconnect from the socket if still connected
-        if socket_io.connected:
-            socket_io.disconnect()
+        try:
+            socket_io.on('joinProjectResponse', set_project_infos)
+            for _ in range(20):
+                if project_infos is not None:
+                    break
+                socket_io.wait(seconds=1)
+        finally:
+            # Disconnect from the socket if still connected
+            if socket_io.connected:
+                socket_io.disconnect()
 
         return project_infos
 
