@@ -12,14 +12,19 @@ Guidance for AI coding agents working in this repository.
 olsync/
   __init__.py         # package docstring + __version__ (flit reads the version from here)
   olsync.py           # click CLI: default sync command + `login`, `list`, `download` subcommands; sync logic
-  olclient.py         # OverleafClient: HTTP/Socket.IO wrapper around overleaf.com
+  olclient.py         # OverleafClient: HTTP/Socket.IO wrapper around overleaf.com (or another server via base_url)
   olbrowserlogin.py   # PySide6 (Qt WebEngine) mini browser used by `ols login`
 pyproject.toml        # [project] metadata (flit_core backend), dependencies + extras, pytest/ruff config
 tests/                # unit/ (default), integration/ (CE container), smoke/ (overleaf.com, local only)
 .github/workflows/    # ci.yml: ruff + unit tests on 3.11-3.14 x ubuntu/macos/windows
 ```
 
-Tests use pytest. `pytest` runs unit tests only; `-m integration` and `-m smoke` are opt-in markers (see `pyproject.toml`). Never run smoke tests unless asked: they hit overleaf.com with a real session. Lint with `ruff check .` (no formatter is enforced yet, so keep diffs minimal and in the surrounding style). `.gitignore` also ignores `setup.py`, `.olauth*`, `.olignore` and `.olsync-state.json`.
+Tests use pytest. `pytest` runs unit tests only; `-m integration` and `-m smoke` are opt-in markers (see `pyproject.toml`).
+
+- **Integration tests** (`tests/integration/`) run against a local Overleaf Community Edition from `tests/integration/compose.yml` (`sharelatex/sharelatex`, pinned; amd64-only, so on Apple Silicon it needs Docker Desktop with Rosetta). The fixtures start the stack if nothing answers on `http://127.0.0.1:8080` (`OLSYNC_CE_URL`) and stop it afterwards unless `--keep-ce` is passed; a first start from scratch can take 10+ minutes under Rosetta. They create the first admin via `/launchpad/register_admin`, log in once per run and read CSRF tokens from the pages' `ol-csrfToken` meta tag (`/dev/csrf` is disabled in the image). Use `127.0.0.1`, not `localhost`: Python's cookie jar never sends cookies back to `localhost`. Overleaf rate-limits zip downloads (10/min per project), project creation (20/min) and logins, hence one project per test module, or per test for CLI round trips. CI runs them in the `integration` job.
+- **Smoke tests** (`tests/smoke/`) hit overleaf.com with a real session from the git-ignored `.env` (see `.env.example`). Never run them unless asked, and only against the pinned `olsync-smoke*` project.
+
+Lint with `ruff check .` (no formatter is enforced yet, so keep diffs minimal and in the surrounding style). `.gitignore` also ignores `setup.py`, `.olauth*`, `.olignore`, `.olsync-state.json` and `.env`.
 
 ## How it works
 
