@@ -31,7 +31,7 @@ PROJECT_URL = "https://www.overleaf.com/project"  # The dashboard URL
 DOWNLOAD_URL = "https://www.overleaf.com/project/{}/download/zip"
 UPLOAD_URL = "https://www.overleaf.com/project/{}/upload"  # The URL to upload files
 FOLDER_URL = "https://www.overleaf.com/project/{}/folder"  # The URL to create folders
-DELETE_URL = "https://www.overleaf.com/project/{}/doc/{}"  # The URL to delete files
+DELETE_URL = "https://www.overleaf.com/project/{}/{}/{}"  # The URL to delete files (entity type: doc or file)
 COMPILE_URL = "https://www.overleaf.com/project/{}/compile?enable_pdf_caching=true"  # The URL to compile the project
 BASE_URL = "https://www.overleaf.com"  # The Overleaf Base URL
 PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
@@ -343,23 +343,21 @@ class OverleafClient(object):
         Returns: True on success, False on fail
         """
 
-        file = None
+        # Walk down to the folder that contains the file (folder names match case-insensitively, as in upload_file)
+        *local_folders, name = file_name.split(PATH_SEP)
+        current_folder = project_infos['rootFolder'][0]
+        for local_folder in local_folders:
+            current_folder = next((f for f in current_folder['folders'] if f['name'].lower() == local_folder.lower()),
+                                  None)
+            if current_folder is None:
+                return False
 
-        # The file name contains path separators, check folders
-        if PATH_SEP in file_name:
-            local_folders = file_name.split(PATH_SEP)[:-1]  # Remove last item since this is the file name
-            current_overleaf_folder = project_infos['rootFolder'][0]['folders']  # Set the current remote folder
-
-            for local_folder in local_folders:
-                for remote_folder in current_overleaf_folder:
-                    if local_folder.lower() == remote_folder['name'].lower():
-                        file = next((v for v in remote_folder['docs'] if v['name'] == file_name.split(PATH_SEP)[-1]),
-                                    None)
-                        current_overleaf_folder = remote_folder['folders']
-                        break
-        # File is in root folder
-        else:
-            file = next((v for v in project_infos['rootFolder'][0]['docs'] if v['name'] == file_name), None)
+        # Text files are "docs", binary files (images, PDFs, ...) are "fileRefs" with their own endpoint
+        file = next((v for v in current_folder.get('docs', []) if v['name'] == name), None)
+        entity_type = "doc"
+        if file is None:
+            file = next((v for v in current_folder.get('fileRefs', []) if v['name'] == name), None)
+            entity_type = "file"
 
         # File not found!
         if file is None:
@@ -369,7 +367,8 @@ class OverleafClient(object):
             "X-Csrf-Token": self._csrf
         }
 
-        r = reqs.delete(DELETE_URL.format(project_id, file['_id']), cookies=self._cookie, headers=headers, json={})
+        r = reqs.delete(DELETE_URL.format(project_id, entity_type, file['_id']), cookies=self._cookie,
+                        headers=headers, json={})
 
         # status_code is an int; comparing to str(204) was always False
         # regardless of the real result, same bug class as upload_file and

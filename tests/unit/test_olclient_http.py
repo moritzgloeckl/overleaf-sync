@@ -126,12 +126,26 @@ def test_delete_returns_true_on_success(rsps, client):
     assert client.delete_file("p1", project_infos(root_docs=[{"_id": "d1", "name": "main.tex"}]), "main.tex")
 
 
-@pytest.mark.xfail(reason="#77: binary files live in fileRefs and need the /file/{id} endpoint")
 def test_delete_binary_file(rsps, client):
+    # Found while testing #77: binary files live in fileRefs and need the /file/{id} endpoint
     rsps.add(responses.DELETE, f"{BASE}/project/p1/file/b1", status=204)
     client.delete_file("p1", project_infos(root_files=[{"_id": "b1", "name": "plot.png"}]), "plot.png")
     assert len(rsps.calls) == 1
 
+
+
+def test_delete_binary_file_in_subfolder(rsps, client):
+    rsps.add(responses.DELETE, f"{BASE}/project/p1/file/b2", status=204)
+    infos = project_infos(folders=[folder("f1", "figs", files=[{"_id": "b2", "name": "plot.png"}])])
+    assert client.delete_file("p1", infos, "figs/plot.png") is True
+    assert rsps.calls[0].request.headers["X-Csrf-Token"] == "csrf-token"
+
+
+def test_delete_in_missing_subfolder_does_not_delete_a_file_from_the_parent(rsps, client):
+    # chapters/missing/intro.tex must not resolve to chapters/intro.tex
+    infos = project_infos(folders=[folder("f1", "chapters", docs=[{"_id": "d2", "name": "intro.tex"}])])
+    assert client.delete_file("p1", infos, "chapters/missing/intro.tex") is False
+    assert len(rsps.calls) == 0
 
 # --- download_pdf ----------------------------------------------------------------------------------------------
 
