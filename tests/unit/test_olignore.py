@@ -46,7 +46,10 @@ def test_paths_use_forward_slashes(project):
     assert all("\\" not in f for f in olsync.olignore_keep_list(".olignore"))
 
 
-@pytest.mark.xfail(reason="#72: './main.tex' and 'main.tex' are not treated as the same path")
 def test_dot_slash_prefix_in_olignore_is_normalised(project):
-    (project / ".olignore").write_text("./main.tex\n")
-    assert "main.tex" not in olsync.olignore_keep_list(".olignore")
+    # #72: './main.tex' and 'main.tex' must mean the same file
+    (project / ".olignore").write_text("./main.tex\n./chapters/deep/*\n")
+    keep = olsync.olignore_keep_list(".olignore")
+    assert "main.tex" not in keep
+    assert "chapters/deep/a.tex" not in keep
+    assert "chapters/intro.tex" in keep

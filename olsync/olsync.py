@@ -410,7 +410,8 @@ def olignore_keep_list(olignore_path):
     else:
         click.echo("\n.olignore: using %s to filter items" % olignore_path)
         with open(olignore_path, 'r') as f:
-            ignore_pattern = f.read().splitlines()
+            # "./main.tex" and "main.tex" mean the same file, matched paths have no "./" prefix (#72)
+            ignore_pattern = [pattern.removeprefix("./") for pattern in f.read().splitlines()]
 
         keep_list = [f for f in files if not any(
             fnmatch.fnmatch(f, ignore) for ignore in ignore_pattern)]
