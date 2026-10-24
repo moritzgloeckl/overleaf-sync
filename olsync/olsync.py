@@ -11,6 +11,7 @@
 
 import click
 import os
+import sys
 from yaspin import yaspin
 import pickle
 import zipfile
@@ -27,6 +28,18 @@ try:
 except ImportError:
     # Import for development
     from olclient import OverleafClient
+
+
+def configure_console():
+    """
+    Windows consoles often default to a legacy codepage (e.g. cp1252) that can't
+    encode the emoji/braille characters used for status output and the spinner,
+    which crashes stdout.write() with UnicodeEncodeError. Force UTF-8 output.
+    Done when the CLI starts rather than on import, so importing olsync has no side effects.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 @click.group(invoke_without_command=True)
@@ -46,6 +59,7 @@ except ImportError:
 @click.version_option(package_name='overleaf-sync')
 @click.pass_context
 def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, verbose):
+    configure_console()
     if ctx.invoked_subcommand is None:
         if not os.path.isfile(cookie_path):
             raise click.ClickException(
