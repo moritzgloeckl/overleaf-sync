@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** the login (`.olauth`) is now stored as JSON, readable only by you, instead of Python's pickle format
+  (loading a pickle file can run arbitrary code). Logins created by 2.0.0a4 or earlier are recognised, but never
+  loaded: overleaf-sync asks you to run `ols login` once more.
+- The login file option is now `--auth-file` on every command. The old names (`--store-path`, and `--path` on
+  `ols login`) still work but are deprecated.
+
+### Removed
+- The unused username/password login code, which stopped working when Overleaf introduced captchas.
+
 ## [2.0.0a4] - 2026-10-25
 
 Fourth pre-release of 2.0: two-way sync never overwrites changes without asking.
@@ -83,6 +95,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[Unreleased]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...HEAD
 [2.0.0a4]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a3...v2.0.0a4
 [2.0.0a3]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a2...v2.0.0a3
 [2.0.0a2]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a1...v2.0.0a2

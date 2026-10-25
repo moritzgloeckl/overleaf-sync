@@ -1,12 +1,12 @@
 """End-to-end CLI behaviour with a fake OverleafClient (no network)."""
 
 import io
-import pickle
 import zipfile
 
 import pytest
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olsync as cli
 
 
@@ -61,8 +61,7 @@ def workdir(tmp_path, monkeypatch):
     """A sync folder named like the project, with a valid auth file, and a fake client."""
     project_dir = tmp_path / "Thesis"
     project_dir.mkdir()
-    with open(project_dir / ".olauth", "wb") as f:
-        pickle.dump({"cookie": {"overleaf_session2": "s"}, "csrf": "c"}, f)
+    olauth.save_auth(project_dir / ".olauth", {"overleaf_session2": "s"}, "c", "https://www.overleaf.com")
     monkeypatch.chdir(project_dir)
     monkeypatch.setattr(cli, "OverleafClient", FakeClient)
     FakeClient.instances = []
@@ -78,7 +77,7 @@ def test_missing_auth_file_is_reported(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.main, [])
     assert result.exit_code != 0
-    assert "Persisted Overleaf cookie not found" in result.output
+    assert "not found" in result.output and "ols login" in result.output
 
 
 def test_auth_file_is_passed_to_client(workdir):

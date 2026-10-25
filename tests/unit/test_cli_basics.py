@@ -16,7 +16,7 @@ def test_help_works_without_pyside6(monkeypatch):
 def test_login_without_pyside6_explains_how_to_install(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "PySide6", None)
     monkeypatch.delitem(sys.modules, "olsync.olbrowserlogin", raising=False)
-    result = CliRunner().invoke(cli.main, ["login", "--path", str(tmp_path / ".olauth")])
+    result = CliRunner().invoke(cli.main, ["login", "--auth-file", str(tmp_path / ".olauth")])
     assert result.exit_code != 0
     assert "overleaf-sync[gui]" in result.output
 

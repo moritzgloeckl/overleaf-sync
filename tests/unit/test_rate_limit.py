@@ -2,13 +2,13 @@
 minute). The client waits and retries instead of failing with an unrelated error."""
 
 import io
-import pickle
 from pathlib import Path
 
 import pytest
 import responses
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olclient
 from olsync import olsync as cli
 from olsync.olclient import OverleafClient, RateLimitError
@@ -68,8 +68,8 @@ def test_persistent_rate_limit_raises_a_clear_error(rsps, no_waiting):
 def test_cli_explains_a_persistent_rate_limit(rsps, tmp_path, monkeypatch):
     rate_limited(rsps, responses.GET, f"{BASE}/project", 10)
     auth = tmp_path / ".olauth"
-    auth.write_bytes(pickle.dumps({"cookie": {"overleaf_session2": "s"}, "csrf": "c"}))
+    olauth.save_auth(auth, {"overleaf_session2": "s"}, "c", BASE)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.main, ["list", "--store-path", str(auth)])
+    result = CliRunner().invoke(cli.main, ["list", "--auth-file", str(auth)])
     assert result.exit_code != 0
     assert "rate limit" in result.output.lower()

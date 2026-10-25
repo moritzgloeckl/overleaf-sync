@@ -1,12 +1,12 @@
 """Choosing the Overleaf server: --server / OLSYNC_SERVER, the server stored at login, or overleaf.com (#65)."""
 
-import pickle
 from pathlib import Path
 
 import pytest
 import responses
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olsync as cli
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -55,8 +55,8 @@ def workdir(tmp_path, monkeypatch):
     return project_dir
 
 
-def write_auth(path, **extra):
-    path.write_bytes(pickle.dumps({"cookie": {"overleaf.sid": "s"}, "csrf": "c", **extra}))
+def write_auth(path, server=OVERLEAF):
+    olauth.save_auth(path, {"overleaf.sid": "s"}, "c", server)
 
 
 def server_used():
@@ -71,7 +71,7 @@ def test_server_stored_at_login_is_used(workdir, args):
     assert server_used() == CE
 
 
-def test_old_auth_files_without_server_use_overleaf_com(workdir):
+def test_overleaf_com_login_uses_overleaf_com(workdir):
     write_auth(workdir / ".olauth")
     assert CliRunner().invoke(cli.main, ["list"]).exit_code == 0
     assert server_used() == OVERLEAF
@@ -121,10 +121,10 @@ def test_login_window_opens_the_server_and_stores_it(tmp_path, monkeypatch, args
     monkeypatch.setattr(cli, "load_browser_login", lambda: FakeBrowserLogin)
     FakeBrowserLogin.calls = []
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, [*args, "--path", str(auth)])
+    result = CliRunner().invoke(cli.main, [*args, "--auth-file", str(auth)])
     assert result.exit_code == 0, result.output
     assert FakeBrowserLogin.calls == [CE]
-    assert pickle.loads(auth.read_bytes())["server"] == CE
+    assert olauth.load_auth(auth)["server"] == CE
 
 
 def test_login_window_defaults_to_overleaf_com(tmp_path, monkeypatch):
@@ -132,9 +132,9 @@ def test_login_window_defaults_to_overleaf_com(tmp_path, monkeypatch):
     monkeypatch.delenv("OLSYNC_SERVER", raising=False)
     FakeBrowserLogin.calls = []
     auth = tmp_path / ".olauth"
-    assert CliRunner().invoke(cli.main, ["login", "--path", str(auth)]).exit_code == 0
+    assert CliRunner().invoke(cli.main, ["login", "--auth-file", str(auth)]).exit_code == 0
     assert FakeBrowserLogin.calls == [OVERLEAF]
-    assert pickle.loads(auth.read_bytes())["server"] == OVERLEAF
+    assert olauth.load_auth(auth)["server"] == OVERLEAF
 
 
 @pytest.fixture
@@ -159,19 +159,19 @@ def test_cookie_login_on_a_self_hosted_server(rsps, tmp_path, cookie_name):
     # Community Edition uses overleaf.sid (sharelatex.sid before version 5) instead of overleaf_session2
     dashboard(rsps, CE, accept_cookie=cookie_name)
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--server", CE, "--path", str(auth)], input="v\n")
+    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--server", CE, "--auth-file", str(auth)], input="v\n")
     assert result.exit_code == 0, result.output
-    assert pickle.loads(auth.read_bytes()) == {"cookie": {cookie_name: "v"}, "csrf": "csrf-from-page", "server": CE}
+    assert olauth.load_auth(auth) == {"cookies": {cookie_name: "v"}, "csrf": "csrf-from-page", "server": CE}
 
 
 def test_cookie_login_on_overleaf_com_stores_the_server(rsps, tmp_path, monkeypatch):
     monkeypatch.delenv("OLSYNC_SERVER", raising=False)
     dashboard(rsps, OVERLEAF, accept_cookie="overleaf_session2")
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)], input="v\n")
+    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--auth-file", str(auth)], input="v\n")
     assert result.exit_code == 0, result.output
-    assert pickle.loads(auth.read_bytes()) == {
-        "cookie": {"overleaf_session2": "v"},
+    assert olauth.load_auth(auth) == {
+        "cookies": {"overleaf_session2": "v"},
         "csrf": "csrf-from-page",
         "server": OVERLEAF,
     }

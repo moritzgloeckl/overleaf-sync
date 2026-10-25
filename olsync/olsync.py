@@ -12,7 +12,6 @@ import click
 import os
 import sys
 from yaspin import yaspin
-import pickle
 import zipfile
 import io
 import dateutil.parser
@@ -24,10 +23,11 @@ from pathlib import Path
 try:
     # Import for pip installation / wheel
     from olsync.olclient import BASE_URL, OverleafClient, RateLimitError
-    from olsync import syncstate
+    from olsync import auth, syncstate
 except ImportError:
     # Import for development
     from olclient import BASE_URL, OverleafClient, RateLimitError
+    import auth
     import syncstate
 
 # Session cookie names: overleaf.com, and self-hosted servers (Community Edition, "sharelatex.sid" before version 5)
@@ -43,6 +43,41 @@ server_option = click.option(
     help="URL of a self-hosted Overleaf server (default: the server used at login, or https://www.overleaf.com). "
     "Can also be set with OLSYNC_SERVER.",
 )
+
+DEFAULT_AUTH_FILE = ".olauth"
+
+
+def auth_file_options(legacy_name):
+    """
+    --auth-file, plus the option name used before 2.0 (--store-path, or --path for login) as a hidden, deprecated alias
+    """
+
+    def decorator(f):
+        f = click.option(legacy_name, "legacy_auth_file", default=None, hidden=True, type=click.Path(exists=False))(f)
+        return click.option(
+            "--auth-file",
+            "auth_file",
+            default=None,
+            type=click.Path(exists=False),
+            metavar="PATH",
+            help=f"Path of the persisted Overleaf login (default: {DEFAULT_AUTH_FILE} in the current directory).",
+        )(f)
+
+    return decorator
+
+
+def resolve_auth_file(ctx, auth_file, legacy_auth_file, legacy_name):
+    """--auth-file of the command, else of the group (`ols --auth-file X list`), else the default"""
+    root = ctx.find_root()
+    candidates = [(auth_file, legacy_auth_file, legacy_name)]
+    if root is not ctx:
+        candidates.append((root.params.get("auth_file"), root.params.get("legacy_auth_file"), "--store-path"))
+    for new, legacy, name in candidates:
+        if legacy:
+            click.echo(f"Warning: {name} is deprecated, use --auth-file instead.", err=True)
+        if new or legacy:
+            return new or legacy
+    return DEFAULT_AUTH_FILE
 
 
 def configure_console():
@@ -73,13 +108,7 @@ def configure_console():
     default="",
     help="Specify the Overleaf project name instead of the default name of the sync directory.",
 )
-@click.option(
-    "--store-path",
-    "cookie_path",
-    default=".olauth",
-    type=click.Path(exists=False),
-    help="Relative path to load the persisted Overleaf cookie.",
-)
+@auth_file_options("--store-path")
 @click.option(
     "-p", "--path", "sync_path", default=".", type=click.Path(exists=True), help="Path of the project to sync."
 )
@@ -96,10 +125,10 @@ def configure_console():
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name="overleaf-sync")
 @click.pass_context
-def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, server, verbose):
+def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_path, olignore_path, server, verbose):
     configure_console()
     if ctx.invoked_subcommand is None:
-        overleaf_client = load_client(cookie_path, server)
+        overleaf_client = load_client(resolve_auth_file(ctx, auth_file, legacy_auth_file, "--store-path"), server)
 
         # Change the current directory to the specified sync path
         os.chdir(sync_path)
@@ -179,13 +208,7 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 
 
 @main.command()
-@click.option(
-    "--path",
-    "cookie_path",
-    default=".olauth",
-    type=click.Path(exists=False),
-    help="Path to store the persisted Overleaf cookie.",
-)
+@auth_file_options("--path")
 @click.option(
     "--cookie",
     "use_cookie",
@@ -198,8 +221,9 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
-def login(ctx, cookie_path, use_cookie, server, verbose):
+def login(ctx, auth_file, legacy_auth_file, use_cookie, server, verbose):
     server = resolve_login_server(ctx, server)
+    cookie_path = resolve_auth_file(ctx, auth_file, legacy_auth_file, "--path")
     if os.path.isfile(cookie_path) and not click.confirm(
         "Persisted Overleaf cookie already exist. Do you want to override it?"
     ):
@@ -234,17 +258,11 @@ def login(ctx, cookie_path, use_cookie, server, verbose):
 
 
 @main.command(name="list")
-@click.option(
-    "--store-path",
-    "cookie_path",
-    default=".olauth",
-    type=click.Path(exists=False),
-    help="Relative path to load the persisted Overleaf cookie.",
-)
+@auth_file_options("--store-path")
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
-def list_projects(ctx, cookie_path, server, verbose):
+def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
     def query_projects():
         for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x["lastUpdated"], reverse=True)):
             if not index:
@@ -252,7 +270,10 @@ def list_projects(ctx, cookie_path, server, verbose):
             click.echo(f"{dateutil.parser.isoparse(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
         return True
 
-    overleaf_client = load_client(cookie_path, server or ctx.find_root().params.get("server"))
+    overleaf_client = load_client(
+        resolve_auth_file(ctx, auth_file, legacy_auth_file, "--store-path"),
+        server or ctx.find_root().params.get("server"),
+    )
 
     click.clear()
     execute_action(
@@ -273,17 +294,11 @@ def list_projects(ctx, cookie_path, server, verbose):
     help="Specify the Overleaf project name instead of the default name of the sync directory.",
 )
 @click.option("--download-path", "download_path", default=".", type=click.Path(exists=True))
-@click.option(
-    "--store-path",
-    "cookie_path",
-    default=".olauth",
-    type=click.Path(exists=False),
-    help="Relative path to load the persisted Overleaf cookie.",
-)
+@auth_file_options("--store-path")
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
-def download_pdf(ctx, project_name, download_path, cookie_path, server, verbose):
+def download_pdf(ctx, project_name, download_path, auth_file, legacy_auth_file, server, verbose):
     def download_project_pdf():
         nonlocal project_name
         project_name = project_name or os.path.basename(os.getcwd())
@@ -304,7 +319,10 @@ def download_pdf(ctx, project_name, download_path, cookie_path, server, verbose)
 
         return True
 
-    overleaf_client = load_client(cookie_path, server or ctx.find_root().params.get("server"))
+    overleaf_client = load_client(
+        resolve_auth_file(ctx, auth_file, legacy_auth_file, "--store-path"),
+        server or ctx.find_root().params.get("server"),
+    )
 
     click.clear()
 
@@ -356,24 +374,20 @@ def resolve_login_server(ctx, server):
 def load_client(cookie_path, server=None):
     """
     Create an OverleafClient from the persisted login. The server is --server/OLSYNC_SERVER if given, otherwise the
-    server stored at login (auth files from before 2.0.0a3 have none and mean overleaf.com).
+    server stored at login.
     """
-    if not os.path.isfile(cookie_path):
-        raise click.ClickException("Persisted Overleaf cookie not found. Please login or check store path.")
-
-    with open(cookie_path, "rb") as f:
-        store = pickle.load(f)
-
-    return OverleafClient(store["cookie"], store["csrf"], base_url=server or store.get("server") or BASE_URL)
+    try:
+        login = auth.load_auth(cookie_path)
+    except auth.AuthFileError as e:
+        raise click.ClickException(str(e))
+    return OverleafClient(login["cookies"], login["csrf"], base_url=server or login["server"])
 
 
 def login_handler(olbrowserlogin, path, server):
     store = olbrowserlogin.login(server)
     if store is None:
         return False
-    store["server"] = server
-    with open(path, "wb+") as f:
-        pickle.dump(store, f)
+    auth.save_auth(path, store["cookie"], store["csrf"], server)
     return True
 
 
@@ -383,8 +397,7 @@ def cookie_login_handler(cookie, path, server, cookie_names):
         cookies = {cookie_name: cookie}
         csrf = OverleafClient(cookies, base_url=server).fetch_csrf()
         if csrf is not None:
-            with open(path, "wb+") as f:
-                pickle.dump({"cookie": cookies, "csrf": csrf, "server": server}, f)
+            auth.save_auth(path, cookies, csrf, server)
             return True
     return False
 

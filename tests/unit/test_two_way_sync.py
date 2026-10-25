@@ -2,13 +2,13 @@
 
 import io
 import os
-import pickle
 import time
 import zipfile
 
 import pytest
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olsync as cli
 
 
@@ -45,7 +45,7 @@ class FakeOverleaf:
 def project(tmp_path, monkeypatch):
     project_dir = tmp_path / "Thesis"
     project_dir.mkdir()
-    (project_dir / ".olauth").write_bytes(pickle.dumps({"cookie": {"overleaf_session2": "s"}, "csrf": "c"}))
+    olauth.save_auth(project_dir / ".olauth", {"overleaf_session2": "s"}, "c", "https://www.overleaf.com")
     monkeypatch.chdir(project_dir)
     monkeypatch.setattr(cli, "OverleafClient", FakeOverleaf)
     FakeOverleaf.files = {}
