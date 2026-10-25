@@ -35,15 +35,15 @@ Depending on your local Python installation, you might need to use `pip` instead
 ### Usage
 #### Login
 ```
-moritz@github:~/test$ ols login [--path]
+moritz@github:~/test$ ols login [--auth-file PATH]
 Login successful. Cookie persisted as `.olauth`. You may now sync your project.
 ```
 
 Logging in will be handled by a mini web browser opening on your device (using Qt via PySide6, from the `gui` extra). You can then enter your username and password securely on the official Overleaf website. You might get asked to solve a CAPTCHA in the process. Your credentials are sent to Overleaf over HTTPS.
 
-It then stores your *cookie* (**not** your login credentials) in a hidden file called `.olauth` in the same folder you run the command from. It is possible to store the cookie elsewhere using the `--path` option. The cookie file will not be synced to or from Overleaf.
+It then stores your session *cookie* (**not** your login credentials) in a hidden file called `.olauth` in the same folder you run the command from, readable only by you. It is possible to store it elsewhere using the `--auth-file` option. The file will not be synced to or from Overleaf.
 
-Keep the `.olauth` file save, as it can be used to log in into your account.
+Keep the `.olauth` file safe, as it can be used to log in to your account. Logins created by 2.0.0a4 or earlier use an older format; overleaf-sync asks you to run `ols login` again.
 
 #### Login without the login window
 On a server without a display, or if the login window doesn't work for your account (e.g. single sign-on via ORCID or your institution), log in with a session cookie instead:
@@ -65,7 +65,7 @@ The server is stored together with the login, so all other commands (`ols`, `ols
 
 ### Listing all projects
 ```
-moritz@github:~/test$ ols list [--store-path -v/--verbose]
+moritz@github:~/test$ ols list [--auth-file PATH -v/--verbose]
 10/31/2021, 01:23:45 - Project A
 09/21/2020, 01:23:45 - Project B
 08/11/2019, 01:23:45 - Project C
@@ -76,21 +76,21 @@ Use `ols list` to conveniently list all projects in your account available for s
 
 ### Downloading project's PDF
 ```
-moritz@github:~/test$ ols download [--name --download-path --store-path -v/--verbose]
+moritz@github:~/test$ ols download [--name --download-path --auth-file PATH -v/--verbose]
 ```
 
 Use `ols download` to compile and download your project's PDF. Specify a download path if you do not want to store the PDF file in the current folder. Currently only downloads the first PDF file it finds.
 
 ### Syncing
 ```
-moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --store-path -p/--path -i/--olignore]
+moritz@github:~/test$ ols [-l/--local-only -r/--remote-only --auth-file PATH -p/--path -i/--olignore]
 ```
 
 Just calling `ols` will two-way sync your project. overleaf-sync remembers what each file looked like after the last sync (in a local `.olsync-state.json` file, which is never uploaded), so it knows on which side a file changed: files changed locally are uploaded, files changed on Overleaf are downloaded. If a file was changed on both sides, or differs on the first sync, you are asked which version to keep (or to skip it). Nothing is overwritten silently.
 
 Using the `-l` or `-r` option you can specify to either sync local project files to Overleaf only or Overleaf files to local ones only respectively. When using these options you can also sync deleted files. If a file has been deleted it can either be deleted on the target (remote when `-l`, local when `-r`) as well, restored on the source (local when `-l`, remote when `-r`) or ignored.
 
-The option `--store-path` specifies the path of the cookie file created by the `login` command. If you did not change its path, you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `-i/--olignore` option allows you to specify the path of an `.olignore` file. It uses `fnmatch` internally, so it may have some similarity to `.gitignore` but doesn't work exactly the same. For example, if you wish to exclude a specific folder named `out`, you need to specify it as `out/*`. See [here](https://docs.python.org/3/library/fnmatch.html) for more information.
+The option `--auth-file` specifies the path of the login file created by the `login` command (`--store-path` still works but is deprecated). If you did not change its path, you do not need to specify this argument. The `-p/--path` option allows you to specify a different sync folder than the one you're calling `ols` from. The `-i/--olignore` option allows you to specify the path of an `.olignore` file. It uses `fnmatch` internally, so it may have some similarity to `.gitignore` but doesn't work exactly the same. For example, if you wish to exclude a specific folder named `out`, you need to specify it as `out/*`. See [here](https://docs.python.org/3/library/fnmatch.html) for more information.
 
 Sample Output:
 

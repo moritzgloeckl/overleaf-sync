@@ -16,13 +16,13 @@ The tests in this folder are read-only; destructive tests are added once remote 
 """
 
 import os
-import pickle
 from pathlib import Path
 
 import pytest
 import requests
 from bs4 import BeautifulSoup
 
+from olsync import auth as olauth
 from olsync.olclient import OverleafClient
 
 NAME_PREFIX = "olsync-smoke"
@@ -71,10 +71,9 @@ def smoke_client():
     if not os.environ.get("OLSYNC_SMOKE_AUTH"):
         pytest.skip("Set OLSYNC_SMOKE_COOKIE or OLSYNC_SMOKE_AUTH (see tests/smoke/conftest.py and .env.example)")
     auth_path = Path(os.environ["OLSYNC_SMOKE_AUTH"]).expanduser()
-    with open(auth_path, "rb") as f:
-        store = pickle.load(f)
-    _dashboard(store["cookie"])
-    return OverleafClient(store["cookie"], store["csrf"])
+    store = olauth.load_auth(auth_path)
+    _dashboard(store["cookies"])
+    return OverleafClient(store["cookies"], store["csrf"], base_url=store["server"])
 
 
 @pytest.fixture(scope="session")

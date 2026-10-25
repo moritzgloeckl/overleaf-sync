@@ -27,7 +27,6 @@ if not hasattr(websocket, "SSLError"):
 
 BASE_URL = "https://www.overleaf.com"  # The default Overleaf server; self-hosted servers are passed as base_url
 # Paths relative to the server's base URL
-LOGIN_PATH = "/login"  # Where to get the CSRF Token and where to send the login request to
 PROJECT_PATH = "/project"  # The dashboard
 DOWNLOAD_PATH = "/project/{}/download/zip"  # Download all the files in zip format
 UPLOAD_PATH = "/project/{}/upload"  # Upload files
@@ -109,40 +108,6 @@ class OverleafClient(object):
 
     def _url(self, path):
         return self._base_url + path
-
-    def login(self, username, password):
-        """
-        WARNING - DEPRECATED - Not working as Overleaf introduced captchas
-        Login to the Overleaf Service with a username and a password
-        Params: username, password
-        Returns: Dict of cookie and CSRF
-        """
-
-        get_login = reqs.get(self._url(LOGIN_PATH))
-        self._csrf = BeautifulSoup(get_login.content, "html.parser").find("input", {"name": "_csrf"}).get("value")
-        login_json = {"_csrf": self._csrf, "email": username, "password": password}
-        post_login = reqs.post(self._url(LOGIN_PATH), json=login_json, cookies=get_login.cookies)
-
-        # On a successful authentication the Overleaf API returns a new authenticated cookie.
-        # If the cookie is different than the cookie of the GET request the authentication was successful
-        if (
-            post_login.status_code == 200
-            and get_login.cookies["overleaf_session2"] != post_login.cookies["overleaf_session2"]
-        ):
-            self._cookie = post_login.cookies
-
-            # Enrich cookie with GCLB cookie from GET request above
-            self._cookie["GCLB"] = get_login.cookies["GCLB"]
-
-            # CSRF changes after making the login request, new CSRF token will be on the projects page
-            projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
-            self._csrf = (
-                BeautifulSoup(projects_page.content, "html.parser")
-                .find("meta", {"name": "ol-csrfToken"})
-                .get("content")
-            )
-
-            return {"cookie": self._cookie, "csrf": self._csrf}
 
     @staticmethod
     def _extract_projects(page_content):

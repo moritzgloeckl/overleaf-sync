@@ -1,6 +1,5 @@
 """`ols login --cookie`: log in without the Qt window, e.g. on a headless server (#80) or with SSO (#83)."""
 
-import pickle
 import sys
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import pytest
 import responses
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olsync as cli
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -32,11 +32,11 @@ def dashboard_ok(rsps):
 def test_login_with_cookie_from_hidden_prompt_writes_auth_file(no_pyside, rsps, tmp_path):
     dashboard_ok(rsps)
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)], input="s3cret\n")
+    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--auth-file", str(auth)], input="s3cret\n")
     assert result.exit_code == 0, result.output
     assert "s3cret" not in result.output
-    assert pickle.loads(auth.read_bytes()) == {
-        "cookie": {"overleaf_session2": "s3cret"},
+    assert olauth.load_auth(auth) == {
+        "cookies": {"overleaf_session2": "s3cret"},
         "csrf": "csrf-from-page",
         "server": "https://www.overleaf.com",
     }
@@ -47,15 +47,15 @@ def test_login_with_cookie_from_environment(no_pyside, rsps, tmp_path, monkeypat
     dashboard_ok(rsps)
     monkeypatch.setenv("OLSYNC_COOKIE", "from-env")
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)])
+    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--auth-file", str(auth)])
     assert result.exit_code == 0, result.output
-    assert pickle.loads(auth.read_bytes())["cookie"] == {"overleaf_session2": "from-env"}
+    assert olauth.load_auth(auth)["cookies"] == {"overleaf_session2": "from-env"}
 
 
 def test_login_with_invalid_cookie_fails_and_writes_nothing(no_pyside, rsps, tmp_path):
     rsps.add(responses.GET, PROJECT_URL, status=302, headers={"Location": "/login"})
     auth = tmp_path / ".olauth"
-    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)], input="expired\n")
+    result = CliRunner().invoke(cli.main, ["login", "--cookie", "--auth-file", str(auth)], input="expired\n")
     assert result.exit_code != 0
     assert "not valid" in result.output
     assert not auth.exists()
@@ -78,7 +78,7 @@ def broken_pyside(monkeypatch):
 
 
 def test_login_window_failing_to_load_explains_the_problem_and_the_cookie_login(broken_pyside, tmp_path):
-    result = CliRunner().invoke(cli.main, ["login", "--path", str(tmp_path / ".olauth")])
+    result = CliRunner().invoke(cli.main, ["login", "--auth-file", str(tmp_path / ".olauth")])
     assert result.exit_code != 0
     assert "No module named 'olbrowserlogin'" not in str(result.exception) + result.output
     assert "DLL load failed" in result.output
@@ -87,6 +87,6 @@ def test_login_window_failing_to_load_explains_the_problem_and_the_cookie_login(
 
 def test_missing_pyside6_mentions_the_cookie_login(no_pyside, tmp_path):
     # #74: on older Linux distributions (glibc < 2.34) PySide6 >= 6.5 can't be installed at all
-    result = CliRunner().invoke(cli.main, ["login", "--path", str(tmp_path / ".olauth")])
+    result = CliRunner().invoke(cli.main, ["login", "--auth-file", str(tmp_path / ".olauth")])
     assert result.exit_code != 0
     assert "ols login --cookie" in result.output

@@ -1,10 +1,9 @@
 """Full `ols` sync runs against a real Overleaf Community Edition server."""
 
-import pickle
-
 import pytest
 from click.testing import CliRunner
 
+from olsync import auth as olauth
 from olsync import olsync as cli
 
 pytestmark = pytest.mark.integration
@@ -28,7 +27,7 @@ def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
     monkeypatch.setenv("OLSYNC_COOKIE", cookies["overleaf.sid"])
     monkeypatch.delenv("OLSYNC_SERVER", raising=False)
     login = CliRunner().invoke(
-        cli.main, ["login", "--cookie", "--server", ce_server, "--path", str(auth)], catch_exceptions=False
+        cli.main, ["login", "--cookie", "--server", ce_server, "--auth-file", str(auth)], catch_exceptions=False
     )
     assert login.exit_code == 0, login.output
     sync_dir = tmp_path / "project"
@@ -38,7 +37,7 @@ def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
     def run(*args, input=None):
         result = CliRunner().invoke(
             cli.main,
-            [*args, "-n", ce_project["name"], "--store-path", str(auth), "-p", str(sync_dir)],
+            [*args, "-n", ce_project["name"], "--auth-file", str(auth), "-p", str(sync_dir)],
             input=input,
             catch_exceptions=False,
         )
@@ -49,13 +48,13 @@ def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
 
 
 def test_login_stores_the_self_hosted_server(ols, tmp_path, ce_server):
-    store = pickle.loads((tmp_path / "olauth").read_bytes())
+    store = olauth.load_auth(tmp_path / "olauth")
     assert store["server"] == ce_server
-    assert set(store["cookie"]) == {"overleaf.sid"}
+    assert set(store["cookies"]) == {"overleaf.sid"}
 
 
 def test_list_uses_the_server_from_the_auth_file(ols, ce_project, tmp_path):
-    result = CliRunner().invoke(cli.main, ["list", "--store-path", str(tmp_path / "olauth")], catch_exceptions=False)
+    result = CliRunner().invoke(cli.main, ["list", "--auth-file", str(tmp_path / "olauth")], catch_exceptions=False)
     assert result.exit_code == 0, result.output
     assert ce_project["name"] in result.output
 
@@ -116,7 +115,7 @@ def test_download_pdf(ols, ce_project, tmp_path):  # ols writes the auth file
     # `download` has no -p option, it takes --download-path instead
     result = CliRunner().invoke(
         cli.main,
-        ["download", "-n", ce_project["name"], "--store-path", str(tmp_path / "olauth"), "--download-path", str(out)],
+        ["download", "-n", ce_project["name"], "--auth-file", str(tmp_path / "olauth"), "--download-path", str(out)],
         catch_exceptions=False,
     )
     assert result.exit_code == 0, result.output
