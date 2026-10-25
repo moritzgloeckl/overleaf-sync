@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    # Weekly, to notice when a new release of a dependency breaks the tests (the Overleaf image is pinned)
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +24,8 @@ jobs:
       - run: ruff check .
 
   unit:
+    # Bounded, so a regression that hangs (e.g. the real-time reconnect loop) fails instead of running for hours
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -44,3 +50,20 @@ jobs:
       - run: 'pip install --only-binary :all: build twine'
       - run: python -m build
       - run: twine check --strict dist/*
+
+  integration:
+    # Runs the integration tests against a local Overleaf Community Edition (tests/integration/compose.yml)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install -e ".[dev]"
+      - name: Start Overleaf Community Edition
+        run: docker compose -f tests/integration/compose.yml up -d --wait --wait-timeout 900
+      - run: pytest -m integration -v --keep-ce
+      - name: Overleaf logs on failure
+        if: failure()
+        run: docker compose -f tests/integration/compose.yml logs sharelatex --tail 200

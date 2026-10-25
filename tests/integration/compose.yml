@@ -1,0 +1,62 @@
+# Overleaf Community Edition for the integration tests (pytest -m integration).
+# Adapted from overleaf/overleaf's docker-compose.yml: no sandboxed compiles (no sibling containers), no fixed container
+# names, named volumes, a high host port. Start with:  docker compose -f tests/integration/compose.yml up -d --wait
+# The sharelatex image is amd64-only; on Apple Silicon it runs via Rosetta (enable it in Docker Desktop).
+name: olsync-ce
+
+services:
+  sharelatex:
+    image: sharelatex/sharelatex:6.3.2
+    platform: linux/amd64
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "${OLSYNC_CE_PORT:-8080}:80"
+    volumes:
+      - sharelatex_data:/var/lib/overleaf
+    environment:
+      OVERLEAF_APP_NAME: overleaf-sync integration tests
+      OVERLEAF_SITE_URL: "http://127.0.0.1:${OLSYNC_CE_PORT:-8080}"
+      OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex
+      OVERLEAF_REDIS_HOST: redis
+      REDIS_HOST: redis
+      ENABLED_LINKED_FILE_TYPES: "project_file,project_output_file"
+      ENABLE_CONVERSIONS: "true"
+      EMAIL_CONFIRMATION_DISABLED: "true"
+      # Required since 6.3. A fixed value is fine for this throwaway local test server; never reuse it elsewhere.
+      OVERLEAF_INVITE_TOKEN_SECRET: olsync-integration-tests-only-not-a-real-secret
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  mongo:
+    image: mongo:8.0
+    command: "--replSet overleaf"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongodb-init-replica-set.js:/docker-entrypoint-initdb.d/mongodb-init-replica-set.js:ro
+    environment:
+      MONGO_INITDB_DATABASE: sharelatex
+    extra_hosts:
+      - mongo:127.0.0.1
+    healthcheck:
+      test: echo 'db.stats().ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:7.4
+    volumes:
+      - redis_data:/data
+
+volumes:
+  sharelatex_data:
+  mongo_data:
+  redis_data:
