@@ -62,14 +62,12 @@ class OlBrowserLoginWindow(QMainWindow):
             QCoreApplication.quit()
 
         if self.webview.url().toString().rstrip("/") == self._base_url + PROJECT_PATH:
-            self.webview.page().runJavaScript(
-                JAVASCRIPT_CSRF_EXTRACTOR, 0, callback
-            )
+            self.webview.page().runJavaScript(JAVASCRIPT_CSRF_EXTRACTOR, 0, callback)
 
     def handle_cookie_added(self, cookie):
-        cookie_name = cookie.name().data().decode('utf-8')
+        cookie_name = cookie.name().data().decode("utf-8")
         if cookie_name in COOKIE_NAMES:
-            self._cookies[cookie_name] = cookie.value().data().decode('utf-8')
+            self._cookies[cookie_name] = cookie.value().data().decode("utf-8")
 
     @property
     def cookies(self):
@@ -86,9 +84,10 @@ class OlBrowserLoginWindow(QMainWindow):
 
 def login(base_url=BASE_URL):
     from PySide6.QtCore import QLoggingCategory
-    QLoggingCategory.setFilterRules('''\
+
+    QLoggingCategory.setFilterRules("""\
     qt.webenginecontext.info=false
-    ''')
+    """)
 
     app = QApplication([])
     ol_browser_login_window = OlBrowserLoginWindow(base_url)

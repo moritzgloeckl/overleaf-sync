@@ -14,6 +14,7 @@ When the session expires, the tests fail with "session expired"; refresh the coo
 Safety rules: tests only act on the pinned OLSYNC_SMOKE_PROJECT_ID, whose name must start with "olsync-smoke".
 The tests in this folder are read-only; destructive tests are added once remote deletion is fixed.
 """
+
 import os
 import pickle
 from pathlib import Path
@@ -81,6 +82,7 @@ def smoke_project(smoke_client):
     project_id = _env("OLSYNC_SMOKE_PROJECT_ID")
     project = next((p for p in smoke_client.all_projects() if p["id"] == project_id), None)
     assert project is not None, f"Project {project_id} not found in the smoke account's project list"
-    assert project["name"].startswith(NAME_PREFIX), \
+    assert project["name"].startswith(NAME_PREFIX), (
         f"Refusing to run: project {project_id} is named {project['name']!r}, not {NAME_PREFIX}*"
+    )
     return project

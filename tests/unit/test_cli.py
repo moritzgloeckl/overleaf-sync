@@ -1,4 +1,5 @@
 """End-to-end CLI behaviour with a fake OverleafClient (no network)."""
+
 import io
 import pickle
 import zipfile
@@ -29,8 +30,10 @@ class FakeClient:
         FakeClient.instances.append(self)
 
     def all_projects(self):
-        return [{"id": "p1", "name": "Thesis", "lastUpdated": "2026-01-02T10:00:00.000Z"},
-                {"id": "p2", "name": "Paper", "lastUpdated": "2026-03-04T10:00:00.000Z"}]
+        return [
+            {"id": "p1", "name": "Thesis", "lastUpdated": "2026-01-02T10:00:00.000Z"},
+            {"id": "p2", "name": "Paper", "lastUpdated": "2026-03-04T10:00:00.000Z"},
+        ]
 
     def get_project(self, name):
         return next((p for p in self.all_projects() if p["name"] == name), None)

@@ -1,4 +1,5 @@
 """Full `ols` sync runs against a real Overleaf Community Edition server."""
+
 import pickle
 
 import pytest
@@ -26,18 +27,24 @@ def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
     auth = tmp_path / "olauth"
     monkeypatch.setenv("OLSYNC_COOKIE", cookies["overleaf.sid"])
     monkeypatch.delenv("OLSYNC_SERVER", raising=False)
-    login = CliRunner().invoke(cli.main, ["login", "--cookie", "--server", ce_server, "--path", str(auth)],
-                               catch_exceptions=False)
+    login = CliRunner().invoke(
+        cli.main, ["login", "--cookie", "--server", ce_server, "--path", str(auth)], catch_exceptions=False
+    )
     assert login.exit_code == 0, login.output
     sync_dir = tmp_path / "project"
     sync_dir.mkdir()
     monkeypatch.chdir(tmp_path)
 
     def run(*args, input=None):
-        result = CliRunner().invoke(cli.main, [*args, "-n", ce_project["name"], "--store-path", str(auth),
-                                               "-p", str(sync_dir)], input=input, catch_exceptions=False)
+        result = CliRunner().invoke(
+            cli.main,
+            [*args, "-n", ce_project["name"], "--store-path", str(auth), "-p", str(sync_dir)],
+            input=input,
+            catch_exceptions=False,
+        )
         assert result.exit_code == 0, result.output
         return result
+
     return run, sync_dir
 
 
@@ -107,9 +114,11 @@ def test_download_pdf(ols, ce_project, tmp_path):  # ols writes the auth file
     out = tmp_path / "out"
     out.mkdir()
     # `download` has no -p option, it takes --download-path instead
-    result = CliRunner().invoke(cli.main, ["download", "-n", ce_project["name"], "--store-path",
-                                           str(tmp_path / "olauth"), "--download-path", str(out)],
-                                catch_exceptions=False)
+    result = CliRunner().invoke(
+        cli.main,
+        ["download", "-n", ce_project["name"], "--store-path", str(tmp_path / "olauth"), "--download-path", str(out)],
+        catch_exceptions=False,
+    )
     assert result.exit_code == 0, result.output
     assert next(out.glob("*.pdf")).read_bytes().startswith(b"%PDF-")
 
@@ -117,6 +126,7 @@ def test_download_pdf(ols, ce_project, tmp_path):  # ols writes the auth file
 def remote_edit(ce_client, ce_project, path, content):
     """Change a file on Overleaf, as if edited online"""
     import io
+
     infos = ce_client.get_project_infos(ce_project["id"])
     assert ce_client.upload_file(ce_project["id"], infos, path, len(content), io.BytesIO(content))
 

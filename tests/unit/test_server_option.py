@@ -1,4 +1,5 @@
 """Choosing the Overleaf server: --server / OLSYNC_SERVER, the server stored at login, or overleaf.com (#65)."""
+
 import pickle
 from pathlib import Path
 
@@ -34,6 +35,7 @@ class RecordingClient:
     def download_project(self, project_id):
         import io
         import zipfile
+
         buf = io.BytesIO()
         zipfile.ZipFile(buf, "w").close()
         return buf.getvalue()
@@ -75,9 +77,11 @@ def test_old_auth_files_without_server_use_overleaf_com(workdir):
     assert server_used() == OVERLEAF
 
 
-@pytest.mark.parametrize("args", [["--server", CE, "list"], ["list", "--server", CE], ["--server", CE, "-r"],
-                                  ["download", "--server", CE]],
-                         ids=["group-option", "command-option", "sync", "download"])
+@pytest.mark.parametrize(
+    "args",
+    [["--server", CE, "list"], ["list", "--server", CE], ["--server", CE, "-r"], ["download", "--server", CE]],
+    ids=["group-option", "command-option", "sync", "download"],
+)
 def test_server_option_overrides_the_auth_file(workdir, args):
     write_auth(workdir / ".olauth", server="http://other.example.test")
     result = CliRunner().invoke(cli.main, args)
@@ -100,6 +104,7 @@ def test_trailing_slash_in_server_is_ignored(workdir):
 
 # --- login ------------------------------------------------------------------------------------------------------
 
+
 class FakeBrowserLogin:
     calls = []
 
@@ -109,8 +114,9 @@ class FakeBrowserLogin:
         return {"cookie": {"overleaf.sid": "from-window"}, "csrf": "c"}
 
 
-@pytest.mark.parametrize("args", [["--server", CE, "login"], ["login", "--server", CE]],
-                         ids=["group-option", "command-option"])
+@pytest.mark.parametrize(
+    "args", [["--server", CE, "login"], ["login", "--server", CE]], ids=["group-option", "command-option"]
+)
 def test_login_window_opens_the_server_and_stores_it(tmp_path, monkeypatch, args):
     monkeypatch.setattr(cli, "load_browser_login", lambda: FakeBrowserLogin)
     FakeBrowserLogin.calls = []
@@ -139,10 +145,12 @@ def rsps():
 
 def dashboard(rsps, server, accept_cookie):
     """The dashboard answers with the page only for the given session cookie name, otherwise redirects to /login."""
+
     def callback(request):
         if accept_cookie + "=" in request.headers.get("Cookie", ""):
             return 200, {"Content-Type": "text/html"}, (FIXTURES / "dashboard_2026.html").read_text()
         return 302, {"Location": "/login"}, ""
+
     rsps.add_callback(responses.GET, f"{server}/project", callback=callback)
 
 
@@ -162,5 +170,8 @@ def test_cookie_login_on_overleaf_com_stores_the_server(rsps, tmp_path, monkeypa
     auth = tmp_path / ".olauth"
     result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)], input="v\n")
     assert result.exit_code == 0, result.output
-    assert pickle.loads(auth.read_bytes()) == {"cookie": {"overleaf_session2": "v"}, "csrf": "csrf-from-page",
-                                               "server": OVERLEAF}
+    assert pickle.loads(auth.read_bytes()) == {
+        "cookie": {"overleaf_session2": "v"},
+        "csrf": "csrf-from-page",
+        "server": OVERLEAF,
+    }

@@ -1,4 +1,5 @@
 """OverleafClient against a real Overleaf Community Edition server."""
+
 import io
 import zipfile
 
@@ -6,8 +7,11 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
-PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"
-                    "1f15c4890000000d4944415478da63f8cfc0f00f0003860180" "5a347d6b0000000049454e44ae426082")
+PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d4944415478da63f8cfc0f00f0003860180"
+    "5a347d6b0000000049454e44ae426082"
+)
 
 
 def upload(client, project, infos, path, content):

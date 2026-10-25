@@ -1,4 +1,5 @@
 """Project list parsing from the Overleaf dashboard page."""
+
 from pathlib import Path
 
 import pytest
@@ -13,8 +14,9 @@ PROJECT_URL = "https://www.overleaf.com/project"
 @pytest.fixture
 def dashboard():
     with responses.RequestsMock() as rsps:
-        yield lambda fixture: rsps.add(responses.GET, PROJECT_URL, body=(FIXTURES / fixture).read_text(),
-                                       content_type="text/html")
+        yield lambda fixture: rsps.add(
+            responses.GET, PROJECT_URL, body=(FIXTURES / fixture).read_text(), content_type="text/html"
+        )
 
 
 def test_filter_projects_drops_archived_and_trashed():

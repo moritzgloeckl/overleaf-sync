@@ -1,4 +1,5 @@
 """Request shape and return values of OverleafClient's HTTP calls (mocked with `responses`)."""
+
 import json
 from urllib.parse import parse_qs, urlparse
 
@@ -23,8 +24,17 @@ def client():
 
 
 def project_infos(root_docs=(), root_files=(), folders=()):
-    return {"rootFolder": [{"_id": "root", "name": "rootFolder", "docs": list(root_docs),
-                            "fileRefs": list(root_files), "folders": list(folders)}]}
+    return {
+        "rootFolder": [
+            {
+                "_id": "root",
+                "name": "rootFolder",
+                "docs": list(root_docs),
+                "fileRefs": list(root_files),
+                "folders": list(folders),
+            }
+        ]
+    }
 
 
 def folder(_id, name, docs=(), files=(), folders=()):
@@ -40,6 +50,7 @@ def query(call):
 
 
 # --- upload_file -----------------------------------------------------------------------------------------------
+
 
 def test_upload_to_root_folder(rsps, client):
     upload_ok(rsps)
@@ -79,12 +90,14 @@ def test_upload_returns_true_on_success(rsps, client):
 
 
 def test_upload_returns_false_on_failure(rsps, client):
-    rsps.add(responses.POST, f"{BASE}/project/p1/upload", json={"success": False, "error": "invalid_filename"},
-             status=422)
+    rsps.add(
+        responses.POST, f"{BASE}/project/p1/upload", json={"success": False, "error": "invalid_filename"}, status=422
+    )
     assert not client.upload_file("p1", project_infos(), "main.tex", 3, b"abc")
 
 
 # --- create_folder ---------------------------------------------------------------------------------------------
+
 
 def test_create_folder_returns_new_folder(rsps, client):
     rsps.add(responses.POST, f"{BASE}/project/p1/folder", json=folder("f1", "figs"), status=200)
@@ -103,6 +116,7 @@ def test_create_folder_raises_on_server_error(rsps, client):
 
 
 # --- delete_file -----------------------------------------------------------------------------------------------
+
 
 def test_delete_doc_in_root(rsps, client):
     rsps.add(responses.DELETE, f"{BASE}/project/p1/doc/d1", status=204)
@@ -133,7 +147,6 @@ def test_delete_binary_file(rsps, client):
     assert len(rsps.calls) == 1
 
 
-
 def test_delete_binary_file_in_subfolder(rsps, client):
     rsps.add(responses.DELETE, f"{BASE}/project/p1/file/b2", status=204)
     infos = project_infos(folders=[folder("f1", "figs", files=[{"_id": "b2", "name": "plot.png"}])])
@@ -147,14 +160,22 @@ def test_delete_in_missing_subfolder_does_not_delete_a_file_from_the_parent(rsps
     assert client.delete_file("p1", infos, "chapters/missing/intro.tex") is False
     assert len(rsps.calls) == 0
 
+
 # --- download_pdf ----------------------------------------------------------------------------------------------
 
+
 def test_download_pdf_compiles_then_fetches_output(rsps, client):
-    rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={
-        "status": "success",
-        "outputFiles": [{"type": "log", "path": "output.log", "url": "/project/p1/build/1/output/output.log"},
-                        {"type": "pdf", "path": "output.pdf", "url": "/project/p1/build/1/output/output.pdf"}],
-    })
+    rsps.add(
+        responses.POST,
+        f"{BASE}/project/p1/compile",
+        json={
+            "status": "success",
+            "outputFiles": [
+                {"type": "log", "path": "output.log", "url": "/project/p1/build/1/output/output.log"},
+                {"type": "pdf", "path": "output.pdf", "url": "/project/p1/build/1/output/output.pdf"},
+            ],
+        },
+    )
     rsps.add(responses.GET, f"{BASE}/project/p1/build/1/output/output.pdf", body=b"%PDF-1.5")
     assert client.download_pdf("p1") == ("output.pdf", b"%PDF-1.5")
 
@@ -169,16 +190,30 @@ def test_download_pdf_does_not_send_an_empty_root_doc_id(rsps, client):
 
 def test_download_pdf_passes_compile_group_and_clsi_server_id(rsps, client):
     # #83: overleaf.com answers the output URL with 404 unless compileGroup and clsiserverid are passed along
-    rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={
-        "status": "success",
-        "compileGroup": "standard",
-        "clsiServerId": "clsi-123",
-        "pdfDownloadDomain": "https://compiles.example.com/zone/b",
-        "outputFiles": [{"type": "pdf", "path": "output.pdf", "build": "b1",
-                         "url": "/project/p1/user/u1/build/b1/output/output.pdf"}],
-    })
-    rsps.add(responses.GET, f"{BASE}/project/p1/user/u1/build/b1/output/output.pdf", body=b"%PDF-1.5",
-             match=[responses.matchers.query_param_matcher({"compileGroup": "standard", "clsiserverid": "clsi-123"})])
+    rsps.add(
+        responses.POST,
+        f"{BASE}/project/p1/compile",
+        json={
+            "status": "success",
+            "compileGroup": "standard",
+            "clsiServerId": "clsi-123",
+            "pdfDownloadDomain": "https://compiles.example.com/zone/b",
+            "outputFiles": [
+                {
+                    "type": "pdf",
+                    "path": "output.pdf",
+                    "build": "b1",
+                    "url": "/project/p1/user/u1/build/b1/output/output.pdf",
+                }
+            ],
+        },
+    )
+    rsps.add(
+        responses.GET,
+        f"{BASE}/project/p1/user/u1/build/b1/output/output.pdf",
+        body=b"%PDF-1.5",
+        match=[responses.matchers.query_param_matcher({"compileGroup": "standard", "clsiserverid": "clsi-123"})],
+    )
     assert client.download_pdf("p1") == ("output.pdf", b"%PDF-1.5")
 
 

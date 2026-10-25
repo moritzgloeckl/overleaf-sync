@@ -1,5 +1,6 @@
 """Overleaf answers with HTTP 429 when a rate limit is reached (e.g. 30 dashboard loads or 10 zip downloads per
 minute). The client waits and retries instead of failing with an unrelated error."""
+
 import io
 import pickle
 from pathlib import Path

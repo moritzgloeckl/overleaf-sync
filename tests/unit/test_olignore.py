@@ -1,4 +1,5 @@
 """Characterization tests for olsync.olignore_keep_list (local file selection)."""
+
 import pytest
 
 from olsync import olsync
@@ -6,8 +7,15 @@ from olsync import olsync
 
 @pytest.fixture
 def project(tmp_path, monkeypatch):
-    for path in ["main.tex", "chapters/intro.tex", "chapters/deep/a.tex", "out/main.pdf", ".hidden",
-                 ".git/config", "figs/plot.png"]:
+    for path in [
+        "main.tex",
+        "chapters/intro.tex",
+        "chapters/deep/a.tex",
+        "out/main.pdf",
+        ".hidden",
+        ".git/config",
+        "figs/plot.png",
+    ]:
         file = tmp_path / path
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text("x")
@@ -17,7 +25,12 @@ def project(tmp_path, monkeypatch):
 
 def test_without_olignore_keeps_all_visible_files(project):
     assert sorted(olsync.olignore_keep_list(".olignore")) == [
-        "chapters/deep/a.tex", "chapters/intro.tex", "figs/plot.png", "main.tex", "out/main.pdf"]
+        "chapters/deep/a.tex",
+        "chapters/intro.tex",
+        "figs/plot.png",
+        "main.tex",
+        "out/main.pdf",
+    ]
 
 
 def test_dotfiles_and_hidden_dirs_are_skipped(project):

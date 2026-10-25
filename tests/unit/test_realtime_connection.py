@@ -1,4 +1,5 @@
 """get_project_infos must fail instead of hanging when the real-time service can't be reached."""
+
 import gc
 import threading
 

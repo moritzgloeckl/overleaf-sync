@@ -1,4 +1,5 @@
 """Per-file sync state for two-way sync: decide per file instead of by the project-wide timestamp."""
+
 import json
 
 import pytest
@@ -12,27 +13,30 @@ def plan(local, remote, state):
     return syncstate.plan_two_way(local, remote, state)
 
 
-@pytest.mark.parametrize("local, remote, state, expected", [
-    # unchanged on both sides
-    ({"f": "a"}, {"f": "a"}, {"f": {"local": "a", "remote": "a"}}, "in_sync"),
-    # same content without history (e.g. first run)
-    ({"f": "a"}, {"f": "a"}, {}, "in_sync"),
-    # changed locally only -> upload
-    ({"f": "b"}, {"f": "a"}, {"f": {"local": "a", "remote": "a"}}, "upload"),
-    # changed on Overleaf only -> download
-    ({"f": "a"}, {"f": "b"}, {"f": {"local": "a", "remote": "a"}}, "download"),
-    # changed on both sides to different content -> conflict
-    ({"f": "b"}, {"f": "c"}, {"f": {"local": "a", "remote": "a"}}, "conflict"),
-    # changed on both sides to the same content -> nothing to do
-    ({"f": "b"}, {"f": "b"}, {"f": {"local": "a", "remote": "a"}}, "in_sync"),
-    # differs, no history -> conflict (never guess on the first run)
-    ({"f": "a"}, {"f": "b"}, {}, "conflict"),
-    # differs, but neither side changed since the last sync (e.g. Overleaf normalised line endings)
-    ({"f": "a"}, {"f": "n"}, {"f": {"local": "a", "remote": "n"}}, "in_sync"),
-    # only local -> upload, only remote -> download (as before 2.0)
-    ({"f": "a"}, {}, {}, "upload"),
-    ({}, {"f": "a"}, {}, "download"),
-])
+@pytest.mark.parametrize(
+    "local, remote, state, expected",
+    [
+        # unchanged on both sides
+        ({"f": "a"}, {"f": "a"}, {"f": {"local": "a", "remote": "a"}}, "in_sync"),
+        # same content without history (e.g. first run)
+        ({"f": "a"}, {"f": "a"}, {}, "in_sync"),
+        # changed locally only -> upload
+        ({"f": "b"}, {"f": "a"}, {"f": {"local": "a", "remote": "a"}}, "upload"),
+        # changed on Overleaf only -> download
+        ({"f": "a"}, {"f": "b"}, {"f": {"local": "a", "remote": "a"}}, "download"),
+        # changed on both sides to different content -> conflict
+        ({"f": "b"}, {"f": "c"}, {"f": {"local": "a", "remote": "a"}}, "conflict"),
+        # changed on both sides to the same content -> nothing to do
+        ({"f": "b"}, {"f": "b"}, {"f": {"local": "a", "remote": "a"}}, "in_sync"),
+        # differs, no history -> conflict (never guess on the first run)
+        ({"f": "a"}, {"f": "b"}, {}, "conflict"),
+        # differs, but neither side changed since the last sync (e.g. Overleaf normalised line endings)
+        ({"f": "a"}, {"f": "n"}, {"f": {"local": "a", "remote": "n"}}, "in_sync"),
+        # only local -> upload, only remote -> download (as before 2.0)
+        ({"f": "a"}, {}, {}, "upload"),
+        ({}, {"f": "a"}, {}, "download"),
+    ],
+)
 def test_plan_two_way(local, remote, state, expected):
     result = plan(local, remote, state)
     assert {action for action, paths in result.items() if "f" in paths} == {expected}

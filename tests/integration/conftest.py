@@ -8,6 +8,7 @@ Set OLSYNC_CE_URL to use an already running server instead (default http://127.0
 stack themselves they also stop it again, unless --keep-ce is passed. Overleaf rate-limits logins and project
 creation, so the fixtures log in once per test run and create one project per test module.
 """
+
 import os
 import subprocess
 import time
@@ -69,10 +70,16 @@ def ce_login(ce_server):
     """Create the first admin user (if needed) and log in once. Returns (cookies, csrf)."""
     session = requests.Session()
     # Only works on a fresh server; afterwards the admin already exists, which is fine
-    session.post(f"{ce_server}/launchpad/register_admin", timeout=60,
-                 json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "_csrf": csrf_token(session, "/launchpad")})
-    r = session.post(f"{ce_server}/login", timeout=60,
-                     json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "_csrf": csrf_token(session)})
+    session.post(
+        f"{ce_server}/launchpad/register_admin",
+        timeout=60,
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "_csrf": csrf_token(session, "/launchpad")},
+    )
+    r = session.post(
+        f"{ce_server}/login",
+        timeout=60,
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "_csrf": csrf_token(session)},
+    )
     assert r.ok, f"Login failed: HTTP {r.status_code} {r.text[:200]}"
     # The session (and its CSRF token) changes on login
     return session.cookies.get_dict(), csrf_token(session, "/project")
@@ -93,8 +100,13 @@ def ce_client(ce_login):
 def create_project(ce_login):
     cookies, csrf = ce_login
     name = f"olsync-it-{uuid.uuid4().hex[:8]}"
-    r = requests.post(f"{CE_URL}/project/new", cookies=cookies, headers={"X-Csrf-Token": csrf},
-                      json={"projectName": name, "template": "none"}, timeout=60)
+    r = requests.post(
+        f"{CE_URL}/project/new",
+        cookies=cookies,
+        headers={"X-Csrf-Token": csrf},
+        json={"projectName": name, "template": "none"},
+        timeout=60,
+    )
     r.raise_for_status()
     return {"id": r.json()["project_id"], "name": name}
 
@@ -125,6 +137,7 @@ def ce_project_per_test(ce_login):
 @pytest.fixture
 def ce_tree(ce_client, ce_project):
     """Returns a function that fetches the current project tree as {path: (type, id)}, folders end with '/'."""
+
     def tree():
         entries = {}
 
@@ -139,6 +152,7 @@ def ce_tree(ce_client, ce_project):
 
         walk(ce_client.get_project_infos(ce_project["id"])["rootFolder"][0], "")
         return entries
+
     return tree
 
 
@@ -153,4 +167,5 @@ def ce_content(ce_login, ce_project):
         r = requests.get(f"{CE_URL}/project/{ce_project['id']}/{kind}/{entity_id}{suffix}", cookies=cookies, timeout=60)
         r.raise_for_status()
         return r.content
+
     return content
