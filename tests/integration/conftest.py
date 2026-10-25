@@ -79,6 +79,12 @@ def ce_login(ce_server):
 
 
 @pytest.fixture(scope="session")
+def ce_credentials(ce_login):
+    """Email and password of the test admin user (which ce_login makes sure exists)"""
+    return ADMIN_EMAIL, ADMIN_PASSWORD
+
+
+@pytest.fixture(scope="session")
 def ce_client(ce_login):
     cookies, csrf = ce_login
     return OverleafClient(cookies, csrf, base_url=CE_URL)

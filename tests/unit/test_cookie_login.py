@@ -35,7 +35,8 @@ def test_login_with_cookie_from_hidden_prompt_writes_auth_file(no_pyside, rsps, 
     result = CliRunner().invoke(cli.main, ["login", "--cookie", "--path", str(auth)], input="s3cret\n")
     assert result.exit_code == 0, result.output
     assert "s3cret" not in result.output
-    assert pickle.loads(auth.read_bytes()) == {"cookie": {"overleaf_session2": "s3cret"}, "csrf": "csrf-from-page"}
+    assert pickle.loads(auth.read_bytes()) == {"cookie": {"overleaf_session2": "s3cret"}, "csrf": "csrf-from-page",
+                                               "server": "https://www.overleaf.com"}
     assert rsps.calls[0].request.headers["Cookie"] == "overleaf_session2=s3cret"
 
 

@@ -22,8 +22,8 @@ class FakeClient:
 
     instances = []
 
-    def __init__(self, cookie, csrf):
-        self.cookie, self.csrf = cookie, csrf
+    def __init__(self, cookie, csrf, base_url="https://www.overleaf.com"):
+        self.cookie, self.csrf, self.base_url = cookie, csrf, base_url
         self.remote = dict(FakeClient.remote)
         self.uploaded, self.deleted = [], []
         FakeClient.instances.append(self)

@@ -1,12 +1,10 @@
 """Full `ols` sync runs against a real Overleaf Community Edition server."""
-import functools
 import pickle
 
 import pytest
 from click.testing import CliRunner
 
 from olsync import olsync as cli
-from olsync.olclient import OverleafClient
 
 pytestmark = pytest.mark.integration
 
@@ -19,14 +17,20 @@ def ce_project(ce_project_per_test):
 
 @pytest.fixture
 def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
-    """Runs `ols` for the test's project in a local sync folder. Returns (run, sync_dir)."""
-    cookies, csrf = ce_login
+    """
+    Logs in to the CE server with `ols login --cookie --server` (as a user of a self-hosted server would), then runs
+    `ols` for the test's project in a local sync folder, without --server: the server comes from the auth file.
+    Returns (run, sync_dir).
+    """
+    cookies, _ = ce_login
     auth = tmp_path / "olauth"
-    auth.write_bytes(pickle.dumps({"cookie": cookies, "csrf": csrf}))
+    monkeypatch.setenv("OLSYNC_COOKIE", cookies["overleaf.sid"])
+    monkeypatch.delenv("OLSYNC_SERVER", raising=False)
+    login = CliRunner().invoke(cli.main, ["login", "--cookie", "--server", ce_server, "--path", str(auth)],
+                               catch_exceptions=False)
+    assert login.exit_code == 0, login.output
     sync_dir = tmp_path / "project"
     sync_dir.mkdir()
-    # Until the CLI has a --server option, point its client at the CE server
-    monkeypatch.setattr(cli, "OverleafClient", functools.partial(OverleafClient, base_url=ce_server))
     monkeypatch.chdir(tmp_path)
 
     def run(*args, input=None):
@@ -35,6 +39,18 @@ def ols(ce_server, ce_login, ce_project, tmp_path, monkeypatch):
         assert result.exit_code == 0, result.output
         return result
     return run, sync_dir
+
+
+def test_login_stores_the_self_hosted_server(ols, tmp_path, ce_server):
+    store = pickle.loads((tmp_path / "olauth").read_bytes())
+    assert store["server"] == ce_server
+    assert set(store["cookie"]) == {"overleaf.sid"}
+
+
+def test_list_uses_the_server_from_the_auth_file(ols, ce_project, tmp_path):
+    result = CliRunner().invoke(cli.main, ["list", "--store-path", str(tmp_path / "olauth")], catch_exceptions=False)
+    assert result.exit_code == 0, result.output
+    assert ce_project["name"] in result.output
 
 
 def test_remote_only_downloads_the_project(ols):

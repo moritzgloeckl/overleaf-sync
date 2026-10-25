@@ -49,10 +49,19 @@ Keep the `.olauth` file save, as it can be used to log in into your account.
 On a server without a display, or if the login window doesn't work for your account (e.g. single sign-on via ORCID or your institution), log in with a session cookie instead:
 
 1. Log in to Overleaf in your normal browser.
-2. Open the developer tools → Application (Firefox: Storage) → Cookies → `https://www.overleaf.com` and copy the value of `overleaf_session2`.
+2. Open the developer tools → Application (Firefox: Storage) → Cookies → `https://www.overleaf.com` and copy the value of `overleaf_session2` (on a self-hosted server: the cookie `overleaf.sid` of your server).
 3. Run `ols login --cookie` and paste the value at the (hidden) prompt, or provide it via the `OLSYNC_COOKIE` environment variable.
 
 This works without installing the `gui` extra.
+
+### Self-hosted Overleaf servers
+overleaf-sync also works with self-hosted Overleaf servers. It is tested against Overleaf Community Edition; Server Pro shares its code and should work too, but is untested. Pass the server's URL when logging in:
+
+```
+moritz@github:~/test$ ols login --server https://overleaf.example.com
+```
+
+The server is stored together with the login, so all other commands (`ols`, `ols list`, `ols download`) use it automatically. You can also set it with `--server` on any command or with the `OLSYNC_SERVER` environment variable. `ols login --cookie --server ...` works too; self-hosted servers name the session cookie `overleaf.sid` (`sharelatex.sid` before version 5).
 
 ### Listing all projects
 ```

@@ -4,7 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [2.0.0a2] - unreleased
+## [Unreleased]
+
+### Added
+- Self-hosted Overleaf servers (tested with Community Edition): `ols login --server URL` (or `OLSYNC_SERVER`). The
+  server is stored with the login and used by all other commands; `--server` works on every command (#65, #15).
+  Building on the earlier work by @hrvylein (#17) and @mone27 (#64).
+- Integration tests against a local Overleaf Community Edition in Docker, run in CI for every change.
+
+### Fixed
+- `ols` could hang forever when the connection to Overleaf's real-time service dropped, and made an unnecessary
+  extra connection when cleaning up.
+
+## [2.0.0a2] - 2026-10-24
 
 Second pre-release of 2.0, with the fixes found while re-testing all open issues against 2.0.0a1.
 
@@ -55,6 +67,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[Unreleased]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a2...HEAD
 [2.0.0a2]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a1...v2.0.0a2
 [2.0.0a1]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0a1
 [1.2.0]: https://pypi.org/project/overleaf-sync/1.2.0/

@@ -60,7 +60,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,gui]"  # gui: the login window test runs Qt offscreen
       - name: Start Overleaf Community Edition
         run: docker compose -f tests/integration/compose.yml up -d --wait --wait-timeout 900
       - run: pytest -m integration -v --keep-ce
