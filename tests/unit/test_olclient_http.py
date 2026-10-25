@@ -221,3 +221,20 @@ def test_download_pdf_raises_if_compile_fails(rsps, client):
     rsps.add(responses.POST, f"{BASE}/project/p1/compile", json={"status": "failure", "outputFiles": []})
     with pytest.raises(requests.HTTPError):
         client.download_pdf("p1")
+
+
+def test_download_pdf_raises_when_output_is_not_served(rsps, client):
+    # A compile can succeed while the output URL still answers 404/403. That must
+    # surface as an error with the status, not as a silent None: the CLI unpacks the
+    # return value, so None becomes "TypeError: cannot unpack non-iterable NoneType".
+    rsps.add(
+        responses.POST,
+        f"{BASE}/project/p1/compile",
+        json={
+            "status": "success",
+            "outputFiles": [{"type": "pdf", "path": "output.pdf", "url": "/project/p1/build/1/output/output.pdf"}],
+        },
+    )
+    rsps.add(responses.GET, f"{BASE}/project/p1/build/1/output/output.pdf", status=404)
+    with pytest.raises(requests.HTTPError, match="404"):
+        client.download_pdf("p1")

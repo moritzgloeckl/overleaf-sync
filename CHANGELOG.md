@@ -55,6 +55,9 @@ Second pre-release of 2.0, with the fixes found while re-testing all open issues
 
 ### Fixed
 - `ols download`: Overleaf rejected the compile request and served the PDF only with additional parameters (#83).
+- `ols download`: when the compiled PDF could not be fetched (e.g. the output URL answered 404 although the compile
+  reported success), the command failed with `TypeError: cannot unpack non-iterable NoneType object` and lost the HTTP
+  status. It now raises an error carrying the status, and the compile and download requests have timeouts.
 - Deleting files on Overleaf with `ols -l`: binary files (images, PDFs) were reported as deleted but stayed on
   Overleaf, and a same-named file in a parent folder could be deleted instead of a file in a missing subfolder (#77).
 - When the login window can't be loaded (e.g. Qt conflicts with Anaconda on Windows), the real error is shown with
