@@ -22,6 +22,7 @@ jobs:
           python-version: "3.14"
       - run: pip install "ruff>=0.6"
       - run: ruff check .
+      - run: ruff format --check .
 
   unit:
     # Bounded, so a regression that hangs (e.g. the real-time reconnect loop) fails instead of running for hours

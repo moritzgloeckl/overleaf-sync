@@ -1,4 +1,5 @@
 """Read-only checks of every Overleaf endpoint the sync depends on."""
+
 import io
 import zipfile
 

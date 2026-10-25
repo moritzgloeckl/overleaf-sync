@@ -1,4 +1,5 @@
 """Two-way sync (`ols` without -l/-r) never overwrites changes silently: it decides per file using the sync state."""
+
 import io
 import os
 import pickle
@@ -105,11 +106,14 @@ def test_unchanged_files_are_left_alone(project):
     assert "Conflict" not in output
 
 
-@pytest.mark.parametrize("answer, expected_local, expected_remote", [
-    ("l", b"local edit", b"local edit"),
-    ("r", b"remote edit", b"remote edit"),
-    ("s", b"local edit", b"remote edit"),
-])
+@pytest.mark.parametrize(
+    "answer, expected_local, expected_remote",
+    [
+        ("l", b"local edit", b"local edit"),
+        ("r", b"remote edit", b"remote edit"),
+        ("s", b"local edit", b"remote edit"),
+    ],
+)
 def test_edits_on_both_sides_ask_which_version_to_keep(project, answer, expected_local, expected_remote):
     FakeOverleaf.files = {"main.tex": b"v1"}
     sync()

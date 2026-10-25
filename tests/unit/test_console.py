@@ -13,4 +13,3 @@ def test_console_is_switched_to_utf8_on_legacy_codepages(monkeypatch):
     stdout.flush()
     # splitlines(): print() writes "\r\n" on Windows
     assert stdout.buffer.getvalue().decode("utf-8").splitlines() == ["✅ done"]
-

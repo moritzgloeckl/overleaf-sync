@@ -39,8 +39,12 @@ def load_state(sync_dir, server, project_id):
             state = json.load(f)
     except (OSError, ValueError):
         return {}
-    if not isinstance(state, dict) or state.get("version") != STATE_VERSION \
-            or state.get("server") != server or state.get("project_id") != project_id:
+    if (
+        not isinstance(state, dict)
+        or state.get("version") != STATE_VERSION
+        or state.get("server") != server
+        or state.get("project_id") != project_id
+    ):
         return {}
     return state.get("files", {})
 

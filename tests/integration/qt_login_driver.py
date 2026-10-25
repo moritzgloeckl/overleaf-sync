@@ -3,6 +3,7 @@ Helper for test_login_window.py: runs the real Qt login window offscreen against
 login form, and prints the result as JSON. Runs in its own process because Qt allows one application per process.
 Usage: python qt_login_driver.py SERVER EMAIL PASSWORD
 """
+
 import json
 import os
 import sys

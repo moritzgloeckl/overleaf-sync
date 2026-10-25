@@ -24,7 +24,7 @@ Tests use pytest. `pytest` runs unit tests only; `-m integration` and `-m smoke`
 - **Integration tests** (`tests/integration/`) run against a local Overleaf Community Edition from `tests/integration/compose.yml` (`sharelatex/sharelatex`, pinned; amd64-only, so on Apple Silicon it needs Docker Desktop with Rosetta). The fixtures start the stack if nothing answers on `http://127.0.0.1:8080` (`OLSYNC_CE_URL`) and stop it afterwards unless `--keep-ce` is passed; a first start from scratch can take 10+ minutes under Rosetta. They create the first admin via `/launchpad/register_admin`, log in once per run and read CSRF tokens from the pages' `ol-csrfToken` meta tag (`/dev/csrf` is disabled in the image). Use `127.0.0.1`, not `localhost`: Python's cookie jar never sends cookies back to `localhost`. Overleaf rate-limits zip downloads (10/min per project), project creation (20/min) and logins, hence one project per test module, or per test for CLI round trips. CI runs them in the `integration` job.
 - **Smoke tests** (`tests/smoke/`) hit overleaf.com with a real session from the git-ignored `.env` (see `.env.example`). Never run them unless asked, and only against the pinned `olsync-smoke*` project.
 
-Lint with `ruff check .` (no formatter is enforced yet, so keep diffs minimal and in the surrounding style). `.gitignore` also ignores `setup.py`, `.olauth*`, `.olignore`, `.olsync-state.json` and `.env`.
+Lint and format with `ruff check .` and `ruff format .` (both enforced in CI; line length 120). `.git-blame-ignore-revs` lists the mechanical formatting commit (`git config blame.ignoreRevsFile .git-blame-ignore-revs`). `.gitignore` also ignores `setup.py`, `.olauth*`, `.olignore`, `.olsync-state.json` and `.env`.
 
 ## How it works
 

@@ -1,4 +1,5 @@
 """Characterization tests for olsync.sync_func, the generic one-direction sync routine."""
+
 import click
 import pytest
 
@@ -85,9 +86,11 @@ def test_differing_newer_file_is_overwritten(monkeypatch):
     assert dst.files == {"main.tex": b"new"}
 
 
-@pytest.mark.xfail(reason="-l/-r still decide 'newer' by the project-wide lastUpdated timestamp, so a file changed "
-                          "on both sides is overwritten without asking. Two-way sync uses the per-file sync state "
-                          "instead (test_two_way_sync.py)")
+@pytest.mark.xfail(
+    reason="-l/-r still decide 'newer' by the project-wide lastUpdated timestamp, so a file changed "
+    "on both sides is overwritten without asking. Two-way sync uses the per-file sync state "
+    "instead (test_two_way_sync.py)"
+)
 def test_differing_newer_file_is_not_overwritten_without_asking(monkeypatch):
     prompts = Prompts(monkeypatch, confirms=[False])
     src, dst = FakeSide({"main.tex": b"remote edit"}), FakeSide({"main.tex": b"local edit"})
@@ -96,11 +99,14 @@ def test_differing_newer_file_is_not_overwritten_without_asking(monkeypatch):
     assert len(prompts.asked) == 1
 
 
-@pytest.mark.parametrize("choice, expected_src, expected_dst", [
-    ("d", {}, {}),
-    ("r", {"gone.tex": b"x"}, {"gone.tex": b"x"}),
-    ("i", {}, {"gone.tex": b"x"}),
-])
+@pytest.mark.parametrize(
+    "choice, expected_src, expected_dst",
+    [
+        ("d", {}, {}),
+        ("r", {"gone.tex": b"x"}, {"gone.tex": b"x"}),
+        ("i", {}, {"gone.tex": b"x"}),
+    ],
+)
 def test_deleted_file_choices(monkeypatch, choice, expected_src, expected_dst):
     Prompts(monkeypatch, choices=[choice])
     src, dst = FakeSide(), FakeSide({"gone.tex": b"x"})
@@ -117,7 +123,14 @@ def test_failure_while_creating_raises_click_exception(monkeypatch):
 
     with pytest.raises(click.ClickException):
         olsync.sync_func(
-            files_from=["main.tex"], deleted_files=[],
-            create_file_at_to=boom, delete_file_at_to=None, create_file_at_from=None,
-            from_exists_in_to=lambda name: False, from_equal_to_to=None, from_newer_than_to=None,
-            from_name="remote", to_name="local")
+            files_from=["main.tex"],
+            deleted_files=[],
+            create_file_at_to=boom,
+            delete_file_at_to=None,
+            create_file_at_from=None,
+            from_exists_in_to=lambda name: False,
+            from_equal_to_to=None,
+            from_newer_than_to=None,
+            from_name="remote",
+            to_name="local",
+        )
