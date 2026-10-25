@@ -23,10 +23,19 @@ from pathlib import Path
 
 try:
     # Import for pip installation / wheel
-    from olsync.olclient import OverleafClient
+    from olsync.olclient import BASE_URL, OverleafClient
 except ImportError:
     # Import for development
-    from olclient import OverleafClient
+    from olclient import BASE_URL, OverleafClient
+
+# Session cookie names: overleaf.com, and self-hosted servers (Community Edition, "sharelatex.sid" before version 5)
+OVERLEAF_COM_SESSION_COOKIES = ["overleaf_session2"]
+SELF_HOSTED_SESSION_COOKIES = ["overleaf.sid", "sharelatex.sid"]
+
+server_option = click.option(
+    '--server', 'server', default=None, envvar='OLSYNC_SERVER', metavar='URL',
+    help="URL of a self-hosted Overleaf server (default: the server used at login, or https://www.overleaf.com). "
+         "Can also be set with OLSYNC_SERVER.")
 
 
 def configure_console():
@@ -54,20 +63,14 @@ def configure_console():
 @click.option('-i', '--olignore', 'olignore_path', default=".olignore", type=click.Path(exists=False),
               help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local). See "
                    "fnmatch / unix filename pattern matching for information on how to use it.")
+@server_option
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name='overleaf-sync')
 @click.pass_context
-def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, verbose):
+def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path, server, verbose):
     configure_console()
     if ctx.invoked_subcommand is None:
-        if not os.path.isfile(cookie_path):
-            raise click.ClickException(
-                "Persisted Overleaf cookie not found. Please login or check store path.")
-
-        with open(cookie_path, 'rb') as f:
-            store = pickle.load(f)
-
-        overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+        overleaf_client = load_client(cookie_path, server)
 
         # Change the current directory to the specified sync path
         os.chdir(sync_path)
@@ -138,26 +141,31 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
 @click.option('--path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Path to store the persisted Overleaf cookie.")
 @click.option('--cookie', 'use_cookie', is_flag=True,
-              help="Log in without the login window, using the `overleaf_session2` cookie from a browser that is "
-                   "logged in to Overleaf (asked for at a hidden prompt, or read from OLSYNC_COOKIE). Useful on "
-                   "servers without a display and for single sign-on accounts.")
+              help="Log in without the login window, using the session cookie from a browser that is logged in to "
+                   "Overleaf (`overleaf_session2` on overleaf.com, `overleaf.sid` on self-hosted servers), asked for "
+                   "at a hidden prompt or read from OLSYNC_COOKIE. Useful on servers without a display and for single "
+                   "sign-on accounts.")
+@server_option
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-def login(cookie_path, use_cookie, verbose):
+@click.pass_context
+def login(ctx, cookie_path, use_cookie, server, verbose):
+    server = resolve_login_server(ctx, server)
     if os.path.isfile(cookie_path) and not click.confirm(
             'Persisted Overleaf cookie already exist. Do you want to override it?'):
         return
     if use_cookie:
+        cookie_names = OVERLEAF_COM_SESSION_COOKIES if server == BASE_URL else SELF_HOSTED_SESSION_COOKIES
         # Never accept the cookie as a command line argument, it would end up in the shell history
-        cookie = os.environ.get("OLSYNC_COOKIE") or click.prompt("Value of the overleaf_session2 cookie",
+        cookie = os.environ.get("OLSYNC_COOKIE") or click.prompt(f"Value of the {cookie_names[0]} cookie",
                                                                  hide_input=True)
-        execute_action(lambda: cookie_login_handler(cookie.strip(), cookie_path), "Login",
+        execute_action(lambda: cookie_login_handler(cookie.strip(), cookie_path, server, cookie_names), "Login",
                        "Login successful. Cookie persisted as `" + click.format_filename(
                            cookie_path) + "`. You may now sync your project.",
                        "Login failed: the cookie is not valid (expired, or copied incompletely).", verbose)
         return
     olbrowserlogin = load_browser_login()
     click.clear()
-    execute_action(lambda: login_handler(olbrowserlogin, cookie_path), "Login",
+    execute_action(lambda: login_handler(olbrowserlogin, cookie_path, server), "Login",
                    "Login successful. Cookie persisted as `" + click.format_filename(
                        cookie_path) + "`. You may now sync your project.",
                    "Login failed. Please try again.", verbose)
@@ -166,8 +174,10 @@ def login(cookie_path, use_cookie, verbose):
 @main.command(name='list')
 @click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Relative path to load the persisted Overleaf cookie.")
+@server_option
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-def list_projects(cookie_path, verbose):
+@click.pass_context
+def list_projects(ctx, cookie_path, server, verbose):
     def query_projects():
         for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x['lastUpdated'], reverse=True)):
             if not index:
@@ -175,14 +185,7 @@ def list_projects(cookie_path, verbose):
             click.echo(f"{dateutil.parser.isoparse(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
         return True
 
-    if not os.path.isfile(cookie_path):
-        raise click.ClickException(
-            "Persisted Overleaf cookie not found. Please login or check store path.")
-
-    with open(cookie_path, 'rb') as f:
-        store = pickle.load(f)
-
-    overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+    overleaf_client = load_client(cookie_path, server or ctx.find_root().params.get("server"))
 
     click.clear()
     execute_action(query_projects, "Querying all projects",
@@ -196,8 +199,10 @@ def list_projects(cookie_path, verbose):
 @click.option('--download-path', 'download_path', default=".", type=click.Path(exists=True))
 @click.option('--store-path', 'cookie_path', default=".olauth", type=click.Path(exists=False),
               help="Relative path to load the persisted Overleaf cookie.")
+@server_option
 @click.option('-v', '--verbose', 'verbose', is_flag=True, help="Enable extended error logging.")
-def download_pdf(project_name, download_path, cookie_path, verbose):
+@click.pass_context
+def download_pdf(ctx, project_name, download_path, cookie_path, server, verbose):
     def download_project_pdf():
         nonlocal project_name
         project_name = project_name or os.path.basename(os.getcwd())
@@ -217,14 +222,7 @@ def download_pdf(project_name, download_path, cookie_path, verbose):
 
         return True
 
-    if not os.path.isfile(cookie_path):
-        raise click.ClickException(
-            "Persisted Overleaf cookie not found. Please login or check store path.")
-
-    with open(cookie_path, 'rb') as f:
-        store = pickle.load(f)
-
-    overleaf_client = OverleafClient(store["cookie"], store["csrf"])
+    overleaf_client = load_client(cookie_path, server or ctx.find_root().params.get("server"))
 
     click.clear()
 
@@ -262,23 +260,46 @@ def load_browser_login():
     return olbrowserlogin
 
 
-def login_handler(olbrowserlogin, path):
-    store = olbrowserlogin.login()
+def resolve_login_server(ctx, server):
+    """--server on the login command, else on the group (both also read OLSYNC_SERVER), else overleaf.com"""
+    return (server or ctx.find_root().params.get("server") or BASE_URL).rstrip("/")
+
+
+def load_client(cookie_path, server=None):
+    """
+    Create an OverleafClient from the persisted login. The server is --server/OLSYNC_SERVER if given, otherwise the
+    server stored at login (auth files from before 2.0.0a3 have none and mean overleaf.com).
+    """
+    if not os.path.isfile(cookie_path):
+        raise click.ClickException(
+            "Persisted Overleaf cookie not found. Please login or check store path.")
+
+    with open(cookie_path, 'rb') as f:
+        store = pickle.load(f)
+
+    return OverleafClient(store["cookie"], store["csrf"], base_url=server or store.get("server") or BASE_URL)
+
+
+def login_handler(olbrowserlogin, path, server):
+    store = olbrowserlogin.login(server)
     if store is None:
         return False
+    store["server"] = server
     with open(path, 'wb+') as f:
         pickle.dump(store, f)
     return True
 
 
-def cookie_login_handler(cookie, path):
-    cookies = {"overleaf_session2": cookie}
-    csrf = OverleafClient(cookies).fetch_csrf()
-    if csrf is None:
-        return False
-    with open(path, 'wb+') as f:
-        pickle.dump({"cookie": cookies, "csrf": csrf}, f)
-    return True
+def cookie_login_handler(cookie, path, server, cookie_names):
+    # Self-hosted servers name the session cookie differently depending on the version, so try each name
+    for cookie_name in cookie_names:
+        cookies = {cookie_name: cookie}
+        csrf = OverleafClient(cookies, base_url=server).fetch_csrf()
+        if csrf is not None:
+            with open(path, 'wb+') as f:
+                pickle.dump({"cookie": cookies, "csrf": csrf, "server": server}, f)
+            return True
+    return False
 
 
 def delete_file(path):
