@@ -23,10 +23,12 @@ from pathlib import Path
 
 try:
     # Import for pip installation / wheel
-    from olsync.olclient import BASE_URL, OverleafClient
+    from olsync.olclient import BASE_URL, OverleafClient, RateLimitError
+    from olsync import syncstate
 except ImportError:
     # Import for development
-    from olclient import BASE_URL, OverleafClient
+    from olclient import BASE_URL, OverleafClient, RateLimitError
+    import syncstate
 
 # Session cookie names: overleaf.com, and self-hosted servers (Community Edition, "sharelatex.sid" before version 5)
 OVERLEAF_COM_SESSION_COOKIES = ["overleaf_session2"]
@@ -98,9 +100,13 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
             "Project could not be downloaded.",
             verbose)
 
-        sync = not (local or remote)
+        if not (local or remote):
+            two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_path, verbose)
+            return
 
-        if remote or sync:
+        sync = False  # -l and -r below sync in one direction only
+
+        if remote:
             remote_files = zip_file.namelist()
             deleted_files = [] if sync else [f for f in olignore_keep_list(olignore_path) if f not in remote_files]
             sync_func(
@@ -117,8 +123,8 @@ def main(ctx, local, remote, project_name, cookie_path, sync_path, olignore_path
                 from_name="remote",
                 to_name="local",
                 verbose=verbose)
-        if local or sync:
-            # Computed once (#60), and after the remote -> local pass so newly downloaded files are included
+        if local:
+            # Computed once (#60)
             local_files = olignore_keep_list(olignore_path)
             deleted_files = [] if sync else [f for f in zip_file.namelist() if f not in local_files]
             sync_func(
@@ -326,6 +332,93 @@ def write_file(path, content):
         f.write(content)
 
 
+def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_path, verbose=False):
+    """
+    Two-way sync that decides per file, based on the state of the last sync (see syncstate.py), instead of the
+    project-wide lastUpdated timestamp. Changes on one side are synced; files changed on both sides, or differing
+    without sync history, are only overwritten after asking.
+    """
+    def read(path):
+        with open(path, 'rb') as f:
+            return f.read()
+
+    server = overleaf_client.base_url
+    remote_content = {name: zip_file.read(name) for name in zip_file.namelist() if not name.endswith("/")}
+    # Local candidates: files allowed by .olignore, plus local copies of remote files (to compare them)
+    local_paths = set(olignore_keep_list(olignore_path)) | {name for name in remote_content if os.path.isfile(name)}
+    local = {path: syncstate.file_hash(read(path)) for path in local_paths}
+    remote = {name: syncstate.file_hash(content) for name, content in remote_content.items()}
+    state = syncstate.load_state(".", server, project["id"])
+    plan = syncstate.plan_two_way(local, remote, state)
+
+    click.echo("\nSyncing files between [local] and [remote]")
+    click.echo('=' * 40)
+
+    downloads, uploads, skipped = list(plan["download"]), list(plan["upload"]), []
+    for path in plan["conflict"]:
+        reason = "was changed locally and on Overleaf since the last sync" if path in state \
+            else "differs between local and Overleaf, and there is no sync history for it yet"
+        choice = click.prompt(
+            '\n-> Conflict: <%s> %s.\nKeep the [l]ocal version, keep the [r]emote version or [s]kip?' % (path, reason),
+            default="s", type=click.Choice(['l', 'r', 's']))
+        {"l": uploads, "r": downloads, "s": skipped}[choice].append(path)
+
+    failed = []
+    for path in downloads:
+        try:
+            write_file(path, remote_content[path])
+        except OSError:
+            if verbose:
+                print(traceback.format_exc())
+            failed.append(path)
+    for path in uploads:
+        try:
+            with open(path, 'rb') as f:
+                ok = overleaf_client.upload_file(project["id"], project_infos, path, os.path.getsize(path), f)
+        except Exception:
+            if verbose:
+                print(traceback.format_exc())
+            ok = False
+        if not ok:
+            failed.append(path)
+
+    for title, paths in [("[DOWNLOAD] Following file(s) downloaded from [remote]", downloads),
+                         ("[UPLOAD] Following file(s) uploaded to [remote]", uploads),
+                         ("[SYNC] Following file(s) are up to date", plan["in_sync"]),
+                         ("[SKIP] Following conflicting file(s) have not been synced", skipped),
+                         ("[ERROR] Following file(s) could not be synced", failed)]:
+        click.echo("\n" + title)
+        for path in paths:
+            click.echo("\t%s" % path)
+
+    # Record what both sides look like now. After uploads, read the project again, so that changes Overleaf makes
+    # to uploaded files (e.g. line endings) are not mistaken for remote edits next time.
+    if set(uploads) - set(failed):
+        try:
+            fresh = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
+            remote_content = {name: fresh.read(name) for name in fresh.namelist() if not name.endswith("/")}
+        except Exception:
+            if verbose:
+                print(traceback.format_exc())
+            for path in set(uploads) - set(failed):
+                remote_content[path] = read(path)
+    new_state = {}
+    for path in sorted(set(local_paths) | set(remote_content) | set(downloads)):
+        if path in skipped or path in failed:
+            if path in state:
+                new_state[path] = state[path]
+        elif path in remote_content and os.path.isfile(path):
+            new_state[path] = {"local": syncstate.file_hash(read(path)),
+                               "remote": syncstate.file_hash(remote_content[path])}
+    syncstate.save_state(".", server, project["id"], new_state)
+
+    click.echo("")
+    if failed:
+        raise click.ClickException("%d file(s) could not be synced, see above" % len(failed))
+    click.echo("✅  Synced files between [local] and [remote]")
+    click.echo("")
+
+
 def sync_func(files_from, deleted_files, create_file_at_to, delete_file_at_to, create_file_at_from, from_exists_in_to,
               from_equal_to_to, from_newer_than_to, from_name,
               to_name, verbose=False):
@@ -436,6 +529,10 @@ def execute_action(action, progress_message, success_message, fail_message, verb
     with yaspin(text=progress_message, color="green") as spinner:
         try:
             success = action()
+        except RateLimitError as e:
+            # A clear reason is more helpful than the generic failure message
+            spinner.fail("💥 ")
+            raise click.ClickException(str(e))
         except:
             if verbose_error_logging:
                 print(traceback.format_exc())

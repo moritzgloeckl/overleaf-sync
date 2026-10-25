@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Two-way sync no longer overwrites changes silently.** overleaf-sync now remembers what each file looked like
+  after the last sync (`.olsync-state.json`, stays local) and decides per file: changes on one side are synced, and
+  files changed on both sides, or differing on the first sync, are only overwritten after asking. Previously, a
+  remote edit anywhere in the project could make a sync replace local edits without asking.
+- Overleaf's rate limits (HTTP 429, e.g. when syncing often) no longer make commands fail with unrelated errors:
+  overleaf-sync waits and retries, and explains the rate limit if it persists.
+
 ## [2.0.0a3] - 2026-10-25
 
 Third pre-release of 2.0: self-hosted Overleaf servers.
@@ -71,6 +81,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[Unreleased]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a3...HEAD
 [2.0.0a3]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a2...v2.0.0a3
 [2.0.0a2]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a1...v2.0.0a2
 [2.0.0a1]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0a1

@@ -112,3 +112,40 @@ def test_download_pdf(ols, ce_project, tmp_path):  # ols writes the auth file
                                 catch_exceptions=False)
     assert result.exit_code == 0, result.output
     assert next(out.glob("*.pdf")).read_bytes().startswith(b"%PDF-")
+
+
+def remote_edit(ce_client, ce_project, path, content):
+    """Change a file on Overleaf, as if edited online"""
+    import io
+    infos = ce_client.get_project_infos(ce_project["id"])
+    assert ce_client.upload_file(ce_project["id"], infos, path, len(content), io.BytesIO(content))
+
+
+def test_two_way_sync_keeps_local_and_remote_edits(ols, ce_client, ce_project, ce_tree, ce_content):
+    run, sync_dir = ols
+    run()  # first sync: downloads main.tex and records the sync state
+    (sync_dir / "local.tex").write_bytes(b"v1")
+    remote_edit(ce_client, ce_project, "remote.tex", b"v1")
+    run()
+    assert (sync_dir / "remote.tex").read_bytes() == b"v1"
+
+    (sync_dir / "local.tex").write_bytes(b"v2, edited locally")
+    remote_edit(ce_client, ce_project, "remote.tex", b"v2, edited on Overleaf")
+    result = run()
+    assert "Conflict" not in result.output
+    assert ce_content(ce_tree()["local.tex"]) == b"v2, edited locally"
+    assert (sync_dir / "remote.tex").read_bytes() == b"v2, edited on Overleaf"
+    assert (sync_dir / "local.tex").read_bytes() == b"v2, edited locally"
+
+
+def test_two_way_sync_asks_when_both_sides_changed(ols, ce_client, ce_project, ce_tree, ce_content):
+    run, sync_dir = ols
+    run()
+    (sync_dir / "both.tex").write_bytes(b"v1")
+    run()
+    (sync_dir / "both.tex").write_bytes(b"local edit")
+    remote_edit(ce_client, ce_project, "both.tex", b"remote edit")
+    result = run(input="l\n")
+    assert "Conflict" in result.output and "both.tex" in result.output
+    assert ce_content(ce_tree()["both.tex"]) == b"local edit"
+    assert (sync_dir / "both.tex").read_bytes() == b"local edit"

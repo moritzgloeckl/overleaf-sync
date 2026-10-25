@@ -85,8 +85,9 @@ def test_differing_newer_file_is_overwritten(monkeypatch):
     assert dst.files == {"main.tex": b"new"}
 
 
-@pytest.mark.xfail(reason="Silent overwrite: 'newer' is decided by the project-wide lastUpdated timestamp, so a "
-                          "file changed on both sides is overwritten without asking (data loss)")
+@pytest.mark.xfail(reason="-l/-r still decide 'newer' by the project-wide lastUpdated timestamp, so a file changed "
+                          "on both sides is overwritten without asking. Two-way sync uses the per-file sync state "
+                          "instead (test_two_way_sync.py)")
 def test_differing_newer_file_is_not_overwritten_without_asking(monkeypatch):
     prompts = Prompts(monkeypatch, confirms=[False])
     src, dst = FakeSide({"main.tex": b"remote edit"}), FakeSide({"main.tex": b"local edit"})

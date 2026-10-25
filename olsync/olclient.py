@@ -12,6 +12,7 @@ import requests as reqs
 from bs4 import BeautifulSoup
 import json
 import ssl
+import sys
 import uuid
 import websocket
 from socketIO_client import SocketIO
@@ -35,6 +36,35 @@ DELETE_PATH = "/project/{}/{}/{}"  # Delete files (entity type: doc or file)
 COMPILE_PATH = "/project/{}/compile?enable_pdf_caching=true"  # Compile the project
 SOCKET_IO_PATH = "/socket.io/1/"  # Real-time service handshake
 PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
+
+# Overleaf answers with HTTP 429 (without Retry-After) when a rate limit is reached, e.g. 30 dashboard loads or 10 zip
+# downloads per minute and project. Its limits use one-minute windows, so wait this many seconds before each retry.
+RATE_LIMIT_WAITS = (5, 10, 20, 30)
+
+
+class RateLimitError(reqs.HTTPError):
+    """Overleaf's rate limit was still reached after waiting and retrying"""
+
+
+def _request(method, url, **kwargs):
+    """requests.request that waits and retries when Overleaf's rate limit is reached"""
+    for wait in RATE_LIMIT_WAITS:
+        r = reqs.request(method, url, **kwargs)
+        if r.status_code != 429:
+            return r
+        print(f"Overleaf's rate limit was reached, retrying in {wait}s ...", file=sys.stderr)
+        time.sleep(wait)
+        # Rewind uploaded files, the rejected request has already read them
+        for value in (kwargs.get("files") or {}).values():
+            file = value[1] if isinstance(value, tuple) else value
+            if hasattr(file, "seek"):
+                file.seek(0)
+    r = reqs.request(method, url, **kwargs)
+    if r.status_code == 429:
+        raise RateLimitError("Overleaf's rate limit was reached (too many requests in a short time). "
+                             "Please wait a minute and try again.", response=r)
+    return r
+
 
 class RealtimeSocket(SocketIO):
     """
@@ -136,7 +166,7 @@ class OverleafClient(object):
         Get the CSRF token from the project dashboard, e.g. after logging in with a cookie copied from a browser
         Returns: the CSRF token, or None if the session cookie is not (or no longer) valid
         """
-        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie, allow_redirects=False)
+        projects_page = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie, allow_redirects=False)
         if not projects_page.ok or projects_page.is_redirect:
             return None
         csrf_tag = BeautifulSoup(projects_page.content, 'html.parser').find('meta', {'name': 'ol-csrfToken'})
@@ -149,7 +179,7 @@ class OverleafClient(object):
         Get all of a user's active projects (= not archived and not trashed)
         Returns: List of project objects
         """
-        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
+        projects_page = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie)
         json_content = OverleafClient._extract_projects(projects_page.content)
         return list(OverleafClient.filter_projects(json_content))
 
@@ -160,7 +190,7 @@ class OverleafClient(object):
         Returns: project object
         """
 
-        projects_page = reqs.get(self._url(PROJECT_PATH), cookies=self._cookie)
+        projects_page = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie)
         json_content = OverleafClient._extract_projects(projects_page.content)
         return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
@@ -170,7 +200,7 @@ class OverleafClient(object):
         Params: project_id, the id of the project
         Returns: bytes string (zip file)
         """
-        r = reqs.get(self._url(DOWNLOAD_PATH.format(project_id)),
+        r = _request("GET", self._url(DOWNLOAD_PATH.format(project_id)),
                      stream=True, cookies=self._cookie)
         return r.content
 
@@ -193,7 +223,7 @@ class OverleafClient(object):
         headers = {
             "X-Csrf-Token": self._csrf
         }
-        r = reqs.post(self._url(FOLDER_PATH.format(project_id)),
+        r = _request("POST", self._url(FOLDER_PATH.format(project_id)),
                       cookies=self._cookie, headers=headers, json=params)
 
         if r.ok:
@@ -240,7 +270,7 @@ class OverleafClient(object):
         # (Built from whatever cookies are present rather than hardcoded names:
         # a session may not carry every cookie -- this previously raised
         # KeyError here even though overleaf_session2 alone is enough to connect.)
-        handshake = reqs.get(
+        handshake = _request("GET", 
             self._url(SOCKET_IO_PATH),
             params={"t": int(time.time() * 1000)},
             cookies=self._cookie,
@@ -348,7 +378,7 @@ class OverleafClient(object):
         }
 
         # Upload the file to the predefined folder
-        r = reqs.post(self._url(UPLOAD_PATH.format(project_id)), cookies=self._cookie, params=params, files=files)
+        r = _request("POST", self._url(UPLOAD_PATH.format(project_id)), cookies=self._cookie, params=params, files=files)
 
         # status_code is an int; comparing to str(200) was always False here,
         # so this reported failure on every call regardless of the real
@@ -392,7 +422,7 @@ class OverleafClient(object):
             "X-Csrf-Token": self._csrf
         }
 
-        r = reqs.delete(self._url(DELETE_PATH.format(project_id, entity_type, file['_id'])), cookies=self._cookie,
+        r = _request("DELETE", self._url(DELETE_PATH.format(project_id, entity_type, file['_id'])), cookies=self._cookie,
                         headers=headers, json={})
 
         # status_code is an int; comparing to str(204) was always False
@@ -421,7 +451,7 @@ class OverleafClient(object):
             "stopOnFirstError": False
         }
 
-        r = reqs.post(self._url(COMPILE_PATH.format(project_id)), cookies=self._cookie, headers=headers, json=body)
+        r = _request("POST", self._url(COMPILE_PATH.format(project_id)), cookies=self._cookie, headers=headers, json=body)
 
         if not r.ok:
             raise reqs.HTTPError()
@@ -441,7 +471,7 @@ class OverleafClient(object):
         if compile_result.get("clsiServerId"):
             params["clsiserverid"] = compile_result["clsiServerId"]
 
-        download_req = reqs.get(self._url(pdf_file['url']), cookies=self._cookie, headers=headers, params=params)
+        download_req = _request("GET", self._url(pdf_file['url']), cookies=self._cookie, headers=headers, params=params)
 
         if download_req.ok:
             return pdf_file['path'], download_req.content
