@@ -158,3 +158,16 @@ def test_two_way_sync_asks_when_both_sides_changed(ols, ce_client, ce_project, c
     assert "Conflict" in result.output and "both.tex" in result.output
     assert ce_content(ce_tree()["both.tex"]) == b"local edit"
     assert (sync_dir / "both.tex").read_bytes() == b"local edit"
+
+
+def test_remote_only_asks_before_overwriting_a_local_edit(ols, ce_client, ce_project):
+    run, sync_dir = ols
+    run("-r")
+    (sync_dir / "main.tex").write_bytes(b"% local edit\n")
+    remote_edit(ce_client, ce_project, "main.tex", b"% remote edit\n")
+    result = run("-r", input="n\n")
+    assert "was changed on [local]" in result.output
+    assert (sync_dir / "main.tex").read_bytes() == b"% local edit\n"
+    remote_edit(ce_client, ce_project, "main.tex", b"% another remote edit\n")
+    run("-r", input="y\n")
+    assert (sync_dir / "main.tex").read_bytes() == b"% another remote edit\n"
