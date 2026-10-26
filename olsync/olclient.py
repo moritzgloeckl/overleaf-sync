@@ -342,7 +342,12 @@ class OverleafClient(object):
         }
 
         r = _request(
-            "POST", self._url(COMPILE_PATH.format(project_id)), cookies=self._cookie, headers=headers, json=body
+            "POST",
+            self._url(COMPILE_PATH.format(project_id)),
+            cookies=self._cookie,
+            headers=headers,
+            json=body,
+            timeout=(10, 300),
         )
 
         if not r.ok:
@@ -363,9 +368,19 @@ class OverleafClient(object):
         if compile_result.get("clsiServerId"):
             params["clsiserverid"] = compile_result["clsiServerId"]
 
-        download_req = _request("GET", self._url(pdf_file["url"]), cookies=self._cookie, headers=headers, params=params)
+        download_req = _request(
+            "GET",
+            self._url(pdf_file["url"]),
+            cookies=self._cookie,
+            headers=headers,
+            params=params,
+            timeout=(10, 120),
+        )
 
-        if download_req.ok:
-            return pdf_file["path"], download_req.content
+        if not download_req.ok:
+            raise reqs.HTTPError(
+                f"Overleaf did not serve the compiled PDF (HTTP {download_req.status_code}).",
+                response=download_req,
+            )
 
-        return None
+        return pdf_file["path"], download_req.content
