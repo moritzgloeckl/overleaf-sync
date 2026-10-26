@@ -24,7 +24,8 @@ jobs:
       - name: Check that the tag matches olsync.__version__
         if: github.event_name == 'push'
         run: |
-          version=$(python -c "import re; print(re.search(r\"__version__ = '([^']+)'\", open('olsync/__init__.py').read()).group(1))")
+          # olsync/__init__.py has no imports, so this works without installing the package's dependencies
+          version=$(python -c "import olsync; print(olsync.__version__)")
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match __version__ $version"
             exit 1

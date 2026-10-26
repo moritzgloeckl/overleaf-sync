@@ -4,12 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.0.0rc1] - 2026-10-26
+
+Release candidate for 2.0: everything planned for 2.0 is done. Please test it before the final release.
 
 ### Fixed
+- `ols download`: when the compiled PDF could not be fetched (e.g. the output URL answered 404 although the compile
+  reported success), the command failed with `TypeError: cannot unpack non-iterable NoneType object` and lost the HTTP
+  status. It now raises an error carrying the status, and the compile and download requests have timeouts
+  (#108 by @hootandy321).
 - `ols -r` and `ols -l` no longer overwrite changes silently either: they use the same sync history as two-way sync
   and only overwrite a file without asking if the other side did not change it since the last sync. Previously they
   decided by comparing timestamps with the project's last update time.
+- An expired or invalid session now gives a clear "log in again" message instead of "Project could not be queried".
+- No more `UserWarning` about colours when the output of `ols` is piped into a file or another program.
 
 ### Changed
 - **Breaking:** the login (`.olauth`) is now stored as JSON, readable only by you, instead of Python's pickle format
@@ -22,12 +30,11 @@ All notable changes to this project are documented here. The format is based on
 - The project's file tree is now fetched from Overleaf's real-time service with a small built-in client (HTTP
   long-polling) instead of the unmaintained `socketIO-client` package from 2016, which also drops `websocket-client`
   as a dependency. `python-dateutil` is no longer needed either.
+- The release workflow reads the version from the package, so its tag check no longer depends on the quoting style.
 
 ### Changed (docs)
 - Reworked README (quick start, sync model, troubleshooting, migrating from 1.x), new CONTRIBUTING.md and
   RELEASING.md, help texts for all commands, and the `.olignore` help no longer claims it is ignored for remote syncs.
-- An expired session now gives a clear "log in again" message.
-- No more `UserWarning` about colours when the output of `ols` is piped into a file or another program.
 
 ### Removed
 - The unused username/password login code, which stopped working when Overleaf introduced captchas.
@@ -71,9 +78,6 @@ Second pre-release of 2.0, with the fixes found while re-testing all open issues
 
 ### Fixed
 - `ols download`: Overleaf rejected the compile request and served the PDF only with additional parameters (#83).
-- `ols download`: when the compiled PDF could not be fetched (e.g. the output URL answered 404 although the compile
-  reported success), the command failed with `TypeError: cannot unpack non-iterable NoneType object` and lost the HTTP
-  status. It now raises an error carrying the status, and the compile and download requests have timeouts.
 - Deleting files on Overleaf with `ols -l`: binary files (images, PDFs) were reported as deleted but stayed on
   Overleaf, and a same-named file in a parent folder could be deleted instead of a file in a missing subfolder (#77).
 - When the login window can't be loaded (e.g. Qt conflicts with Anaconda on Windows), the real error is shown with
@@ -114,7 +118,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
-[Unreleased]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...HEAD
+[2.0.0rc1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...v2.0.0rc1
 [2.0.0a4]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a3...v2.0.0a4
 [2.0.0a3]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a2...v2.0.0a3
 [2.0.0a2]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a1...v2.0.0a2
