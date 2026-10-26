@@ -11,19 +11,17 @@
 import requests as reqs
 from bs4 import BeautifulSoup
 import json
-import ssl
 import sys
-import uuid
-import websocket
-from socketIO_client import SocketIO
 import time
+import uuid
 
-# socketIO_client/transports.py has `except websocket.SSLError`, an attribute
-# recent websocket-client (1.9.0+) no longer exposes; that raises AttributeError
-# and masks whatever the actual connection error is. Keep this shim for as long
-# as we depend on socketIO-client.
-if not hasattr(websocket, "SSLError"):
-    websocket.SSLError = ssl.SSLError
+try:
+    # Import for pip installation / wheel
+    from olsync import realtime
+except ImportError:
+    # Import for development
+    import realtime
+
 
 BASE_URL = "https://www.overleaf.com"  # The default Overleaf server; self-hosted servers are passed as base_url
 # Paths relative to the server's base URL
@@ -33,7 +31,6 @@ UPLOAD_PATH = "/project/{}/upload"  # Upload files
 FOLDER_PATH = "/project/{}/folder"  # Create folders
 DELETE_PATH = "/project/{}/{}/{}"  # Delete files (entity type: doc or file)
 COMPILE_PATH = "/project/{}/compile?enable_pdf_caching=true"  # Compile the project
-SOCKET_IO_PATH = "/socket.io/1/"  # Real-time service handshake
 PATH_SEP = "/"  # Use hardcoded path separator for both windows and posix system
 
 # Overleaf answers with HTTP 429 (without Retry-After) when a rate limit is reached, e.g. 30 dashboard loads or 10 zip
@@ -45,10 +42,11 @@ class RateLimitError(reqs.HTTPError):
     """Overleaf's rate limit was still reached after waiting and retrying"""
 
 
-def _request(method, url, **kwargs):
-    """requests.request that waits and retries when Overleaf's rate limit is reached"""
+def _request(method, url, session=None, **kwargs):
+    """requests.request (or session.request) that waits and retries when Overleaf's rate limit is reached"""
+    requester = session or reqs
     for wait in RATE_LIMIT_WAITS:
-        r = reqs.request(method, url, **kwargs)
+        r = requester.request(method, url, **kwargs)
         if r.status_code != 429:
             return r
         print(f"Overleaf's rate limit was reached, retrying in {wait}s ...", file=sys.stderr)
@@ -58,7 +56,7 @@ def _request(method, url, **kwargs):
             file = value[1] if isinstance(value, tuple) else value
             if hasattr(file, "seek"):
                 file.seek(0)
-    r = reqs.request(method, url, **kwargs)
+    r = requester.request(method, url, **kwargs)
     if r.status_code == 429:
         raise RateLimitError(
             "Overleaf's rate limit was reached (too many requests in a short time). "
@@ -66,20 +64,6 @@ def _request(method, url, **kwargs):
             response=r,
         )
     return r
-
-
-class RealtimeSocket(SocketIO):
-    """
-    socketIO-client's SocketIO, minus its cleanup quirk: SocketIO.__del__ calls disconnect(), which opens a brand-new
-    connection when the old one is already closed (and, with wait_for_connection=True, retries that forever).
-    """
-
-    def __del__(self):
-        try:
-            if self.connected:
-                self.disconnect()
-        except Exception:
-            pass
 
 
 class OverleafClient(object):
@@ -201,87 +185,16 @@ class OverleafClient(object):
 
     def get_project_infos(self, project_id):
         """
-        Get detailed project infos about the project
+        Get detailed project infos about the project, incl. its file tree, from Overleaf's real-time service
 
         Params:
         project_id: the id of the project
 
         Returns: project details
         """
-        project_infos = None
-
-        # Callback for the joinProjectResponse event the server pushes right
-        # after a successful connect+auto-join (see below) -- delivered as a
-        # plain named event, not as an ack to an explicit emit, and shaped as
-        # {"publicId": ..., "project": {...}}. Downstream code (upload_file,
-        # delete_file) indexes project_infos['rootFolder'][0][...] directly,
-        # so unwrap to the inner "project" dict here rather than returning
-        # the wrapper.
-        def set_project_infos(data):
-            nonlocal project_infos
-            project_infos = data.get("project")
-
-        # The Socket.IO handshake below (done again internally by the SocketIO()
-        # constructor) has Overleaf issue a *fresh* load-balancer affinity cookie
-        # (currently named GCLB, see olbrowserlogin.COOKIE_NAMES and commit
-        # 0cc61e7) on its response -- but socketIO_client calls requests.get()
-        # directly rather than through a Session, so that Set-Cookie is silently
-        # dropped, and the WebSocket upgrade that follows then 502s without it.
-        # Perform the same handshake ourselves first, purely to capture that
-        # cookie, and merge it into the header used for the real connection.
-        # (Built from whatever cookies are present rather than hardcoded names:
-        # a session may not carry every cookie -- this previously raised
-        # KeyError here even though overleaf_session2 alone is enough to connect.)
-        handshake = _request(
-            "GET",
-            self._url(SOCKET_IO_PATH),
-            params={"t": int(time.time() * 1000)},
-            cookies=self._cookie,
-        )
-        cookie_dict = dict(self._cookie)
-        cookie_dict.update(handshake.cookies.get_dict())
-        cookie = "; ".join("{}={}".format(name, value) for name, value in cookie_dict.items())
-
-        # projectId must be a query parameter on THIS handshake -- the one
-        # socketIO_client performs internally when SocketIO() connects, not
-        # the pre-fetch above. Overleaf now binds the session to a project at
-        # handshake time and rejects the connection otherwise
-        # (connectionRejected: "missing/bad ?projectId=... query flag on
-        # handshake"); confirmed it rejects even when projectId is only on
-        # the WebSocket upgrade URL -- it must be on the initial
-        # /socket.io/1/ GET specifically.
-        socket_io = RealtimeSocket(
-            self._base_url,
-            params={"t": int(time.time()), "projectId": project_id},
-            headers={"Cookie": cookie},
-            # Fail instead of retrying forever (and hanging the CLI) when the real-time service is unreachable
-            wait_for_connection=False,
-        )
-
-        # Wait until we connect to the socket
-        socket_io.on("connect", lambda: None)
-        socket_io.wait_for_callbacks()
-
-        # With projectId on the handshake, the server auto-joins and pushes
-        # the result as a joinProjectResponse event -- no explicit joinProject
-        # emit needed (confirmed live: the emit's ack callback never fires
-        # since the server responds with a named event, not an ack).
-        # wait_for_callbacks() only waits for a pending *ack* callback, which
-        # .on() never registers -- it would return immediately without
-        # reading anything. Wait in short slices instead, stopping as soon as
-        # the event has actually been processed.
-        try:
-            socket_io.on("joinProjectResponse", set_project_infos)
-            for _ in range(20):
-                if project_infos is not None:
-                    break
-                socket_io.wait(seconds=1)
-        finally:
-            # Disconnect from the socket if still connected
-            if socket_io.connected:
-                socket_io.disconnect()
-
-        return project_infos
+        session = reqs.Session()
+        session.cookies.update(self._cookie or {})
+        return realtime.join_project(session, self._base_url, project_id, request=_request)
 
     def upload_file(self, project_id, project_infos, file_name, file_size, file):
         """

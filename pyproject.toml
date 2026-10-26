@@ -21,8 +21,6 @@ dependencies = [
     "yaspin >=3,<4",
     "python-dateutil >=2.8,<3",
     "click >=8.1,<9",
-    "socketIO-client ==0.5.7.2",  # Do not upgrade, see AGENTS.md
-    "websocket-client >=1,<2",
 ]
 
 [project.optional-dependencies]

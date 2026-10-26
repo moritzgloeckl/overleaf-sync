@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format is based on
 - The login file option is now `--auth-file` on every command. The old names (`--store-path`, and `--path` on
   `ols login`) still work but are deprecated.
 
+### Changed (internal)
+- The project's file tree is now fetched from Overleaf's real-time service with a small built-in client (HTTP
+  long-polling) instead of the unmaintained `socketIO-client` package from 2016, which also drops `websocket-client`
+  as a dependency.
+
 ### Removed
 - The unused username/password login code, which stopped working when Overleaf introduced captchas.
 
