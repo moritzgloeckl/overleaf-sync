@@ -152,3 +152,10 @@ def test_state_file_stays_local(project):
     _, uploads = sync()
     assert ".olsync-state.json" not in FakeOverleaf.files
     assert uploads == []
+
+
+def test_output_only_lists_sections_with_files(project):
+    FakeOverleaf.files = {"main.tex": b"v1"}
+    output, _ = sync()
+    assert "[DOWNLOAD]" in output
+    assert "[SKIP]" not in output and "[ERROR]" not in output

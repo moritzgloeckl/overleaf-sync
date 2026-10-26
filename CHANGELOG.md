@@ -23,6 +23,11 @@ All notable changes to this project are documented here. The format is based on
   long-polling) instead of the unmaintained `socketIO-client` package from 2016, which also drops `websocket-client`
   as a dependency. `python-dateutil` is no longer needed either.
 
+### Changed (docs)
+- Reworked README (quick start, sync model, troubleshooting, migrating from 1.x), new CONTRIBUTING.md and
+  RELEASING.md, help texts for all commands, and the `.olignore` help no longer claims it is ignored for remote syncs.
+- An expired session now gives a clear "log in again" message.
+
 ### Removed
 - The unused username/password login code, which stopped working when Overleaf introduced captchas.
 

@@ -118,14 +118,18 @@ def configure_console():
     "olignore_path",
     default=".olignore",
     type=click.Path(exists=False),
-    help="Path to the .olignore file relative to sync path (ignored if syncing from remote to local). See "
-    "fnmatch / unix filename pattern matching for information on how to use it.",
+    help="Path to the .olignore file (relative to the sync path): fnmatch patterns of local files that are never "
+    "uploaded, e.g. `*.log` or `out/*`.",
 )
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name="overleaf-sync")
 @click.pass_context
 def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_path, olignore_path, server, verbose):
+    """
+    Sync an Overleaf project with the current folder (or --path). Without -l/-r, changes on both sides are synced, and
+    you're asked before anything that was changed on both sides is overwritten.
+    """
     configure_console()
     if ctx.invoked_subcommand is None:
         overleaf_client = load_client(resolve_auth_file(ctx, auth_file, legacy_auth_file, "--store-path"), server)
@@ -225,6 +229,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
 def login(ctx, auth_file, legacy_auth_file, use_cookie, server, verbose):
+    """Log in to Overleaf and store the session for the other commands."""
     server = resolve_login_server(ctx, server)
     cookie_path = resolve_auth_file(ctx, auth_file, legacy_auth_file, "--path")
     if os.path.isfile(cookie_path) and not click.confirm(
@@ -266,6 +271,8 @@ def login(ctx, auth_file, legacy_auth_file, use_cookie, server, verbose):
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
 def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
+    """List your Overleaf projects, most recently changed first."""
+
     def query_projects():
         for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x["lastUpdated"], reverse=True)):
             if not index:
@@ -296,12 +303,20 @@ def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
     default="",
     help="Specify the Overleaf project name instead of the default name of the sync directory.",
 )
-@click.option("--download-path", "download_path", default=".", type=click.Path(exists=True))
+@click.option(
+    "--download-path",
+    "download_path",
+    default=".",
+    type=click.Path(exists=True),
+    help="Folder to save the PDF in (default: the current folder).",
+)
 @auth_file_options("--store-path")
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
 def download_pdf(ctx, project_name, download_path, auth_file, legacy_auth_file, server, verbose):
+    """Compile the project on Overleaf and download the PDF."""
+
     def download_project_pdf():
         nonlocal project_name
         project_name = project_name or os.path.basename(os.getcwd())
@@ -531,9 +546,10 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
         ("[SKIP] Following conflicting file(s) have not been synced", skipped),
         ("[ERROR] Following file(s) could not be synced", failed),
     ]:
-        click.echo("\n" + title)
-        for path in paths:
-            click.echo("\t%s" % path)
+        if paths:
+            click.echo("\n" + title)
+            for path in paths:
+                click.echo("\t%s" % path)
 
     # Record what both sides look like now. After uploads, read the project again, so that changes Overleaf makes
     # to uploaded files (e.g. line endings) are not mistaken for remote edits next time.
