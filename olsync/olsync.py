@@ -9,12 +9,12 @@
 ##################################################
 
 import click
+from datetime import datetime
 import os
 import sys
 from yaspin import yaspin
 import zipfile
 import io
-import dateutil.parser
 import glob
 import fnmatch
 import traceback
@@ -163,11 +163,12 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
             return
 
         sync = False  # -l and -r below sync in one direction only
+        state = syncstate.load_state(".", overleaf_client.base_url, project["id"])
 
         if remote:
             remote_files = zip_file.namelist()
             deleted_files = [] if sync else [f for f in olignore_keep_list(olignore_path) if f not in remote_files]
-            sync_func(
+            written = sync_func(
                 files_from=remote_files,
                 deleted_files=deleted_files,
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
@@ -177,18 +178,19 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 ),
                 from_exists_in_to=lambda name: os.path.isfile(name),
                 from_equal_to_to=lambda name: open(name, "rb").read() == zip_file.read(name),
-                from_newer_than_to=lambda name: (
-                    dateutil.parser.isoparse(project["lastUpdated"]).timestamp() > os.path.getmtime(name)
+                to_unchanged_since_last_sync=lambda name: unchanged_since_last_sync(
+                    state, name, "local", read_file(name)
                 ),
                 from_name="remote",
                 to_name="local",
                 verbose=verbose,
             )
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["from"]))
         if local:
             # Computed once (#60)
             local_files = olignore_keep_list(olignore_path)
             deleted_files = [] if sync else [f for f in zip_file.namelist() if f not in local_files]
-            sync_func(
+            written = sync_func(
                 files_from=local_files,
                 deleted_files=deleted_files,
                 create_file_at_to=lambda name: overleaf_client.upload_file(
@@ -198,13 +200,14 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 create_file_at_from=lambda name: write_file(name, zip_file.read(name)),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
                 from_equal_to_to=lambda name: open(name, "rb").read() == zip_file.read(name),
-                from_newer_than_to=lambda name: (
-                    os.path.getmtime(name) > dateutil.parser.isoparse(project["lastUpdated"]).timestamp()
+                to_unchanged_since_last_sync=lambda name: unchanged_since_last_sync(
+                    state, name, "remote", zip_file.read(name)
                 ),
                 from_name="local",
                 to_name="remote",
                 verbose=verbose,
             )
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["to"]))
 
 
 @main.command()
@@ -267,7 +270,7 @@ def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
         for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x["lastUpdated"], reverse=True)):
             if not index:
                 click.echo("\n")
-            click.echo(f"{dateutil.parser.isoparse(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
+            click.echo(f"{datetime.fromisoformat(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
         return True
 
     overleaf_client = load_client(
@@ -426,6 +429,45 @@ def write_file(path, content):
         f.write(content)
 
 
+def read_file(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def unchanged_since_last_sync(state, path, side, content):
+    """True if `side` ("local" or "remote") of `path` still has the content recorded at the last sync"""
+    return state.get(path, {}).get(side) == syncstate.file_hash(content)
+
+
+def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
+    """
+    Record the sync state after a one-way sync (-l/-r): files that were synced, or are identical on both sides, get
+    their current hashes; other files (e.g. skipped ones) keep their previous state. After uploads, the project is read
+    again, so that Overleaf's own changes to uploaded files are not mistaken for remote edits later.
+    """
+    remote_zip = zip_file
+    if uploaded:
+        try:
+            remote_zip = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
+        except Exception:
+            remote_zip = zip_file
+    remote_content = {name: remote_zip.read(name) for name in remote_zip.namelist() if not name.endswith("/")}
+    new_state = {}
+    for path in sorted(set(remote_content) | set(state)):
+        on_both_sides = path in remote_content and os.path.isfile(path)
+        if on_both_sides:
+            local = read_file(path)
+            if path in synced or local == remote_content[path]:
+                new_state[path] = {
+                    "local": syncstate.file_hash(local),
+                    "remote": syncstate.file_hash(remote_content[path]),
+                }
+                continue
+        if path in state and (on_both_sides or path in remote_content or os.path.isfile(path)):
+            new_state[path] = state[path]
+    syncstate.save_state(".", overleaf_client.base_url, project["id"], new_state)
+
+
 def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_path, verbose=False):
     """
     Two-way sync that decides per file, based on the state of the last sync (see syncstate.py), instead of the
@@ -531,7 +573,7 @@ def sync_func(
     create_file_at_from,
     from_exists_in_to,
     from_equal_to_to,
-    from_newer_than_to,
+    to_unchanged_since_last_sync,
     from_name,
     to_name,
     verbose=False,
@@ -550,9 +592,9 @@ def sync_func(
     for name in files_from:
         if from_exists_in_to(name):
             if not from_equal_to_to(name):
-                if not from_newer_than_to(name) and not click.confirm(
-                    "\n-> Warning: last-edit time stamp of file <%s> from [%s] is older than [%s].\nContinue to "
-                    "overwrite with an older version?" % (name, from_name, to_name)
+                if not to_unchanged_since_last_sync(name) and not click.confirm(
+                    "\n-> Warning: file <%s> was changed on [%s] since the last sync (or there is no sync history for "
+                    "it yet).\nOverwrite it with the version from [%s]?" % (name, to_name, from_name)
                 ):
                     not_sync_list.append(name)
                     continue
@@ -632,6 +674,9 @@ def sync_func(
     click.echo("")
     click.echo("✅  Synced files from [%s] to [%s]" % (from_name, to_name))
     click.echo("")
+
+    # Which files were written on each side, for recording the sync state
+    return {"to": newly_add_list + update_list, "from": restore_list}
 
 
 def execute_action(action, progress_message, success_message, fail_message, verbose_error_logging=False):

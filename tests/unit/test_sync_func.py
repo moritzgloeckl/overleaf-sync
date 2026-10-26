@@ -32,8 +32,8 @@ class Prompts:
         return self.choices.pop(0)
 
 
-def run_sync(src, dst, newer=(), deleted=()):
-    """Sync src -> dst. `newer` lists the names where src counts as newer than dst."""
+def run_sync(src, dst, unchanged=(), deleted=()):
+    """Sync src -> dst. `unchanged` lists the names whose target side did not change since the last sync."""
     olsync.sync_func(
         files_from=list(src.files),
         deleted_files=list(deleted),
@@ -42,7 +42,7 @@ def run_sync(src, dst, newer=(), deleted=()):
         create_file_at_from=lambda name: src.files.__setitem__(name, dst.files[name]),
         from_exists_in_to=lambda name: name in dst.files,
         from_equal_to_to=lambda name: src.files[name] == dst.files[name],
-        from_newer_than_to=lambda name: name in newer,
+        to_unchanged_since_last_sync=lambda name: name in unchanged,
         from_name="remote",
         to_name="local",
     )
@@ -64,7 +64,7 @@ def test_unchanged_file_is_left_alone(monkeypatch):
     assert prompts.asked == []
 
 
-def test_differing_older_file_asks_and_overwrites_on_yes(monkeypatch):
+def test_file_changed_on_target_asks_and_overwrites_on_yes(monkeypatch):
     prompts = Prompts(monkeypatch, confirms=[True])
     src, dst = FakeSide({"main.tex": b"old"}), FakeSide({"main.tex": b"new"})
     run_sync(src, dst)
@@ -72,31 +72,18 @@ def test_differing_older_file_asks_and_overwrites_on_yes(monkeypatch):
     assert len(prompts.asked) == 1
 
 
-def test_differing_older_file_asks_and_keeps_target_on_no(monkeypatch):
+def test_file_changed_on_target_asks_and_keeps_target_on_no(monkeypatch):
     Prompts(monkeypatch, confirms=[False])
     src, dst = FakeSide({"main.tex": b"old"}), FakeSide({"main.tex": b"new"})
     run_sync(src, dst)
     assert dst.files == {"main.tex": b"new"}
 
 
-def test_differing_newer_file_is_overwritten(monkeypatch):
+def test_file_unchanged_on_target_is_overwritten_without_asking(monkeypatch):
     Prompts(monkeypatch)
     src, dst = FakeSide({"main.tex": b"new"}), FakeSide({"main.tex": b"old"})
-    run_sync(src, dst, newer={"main.tex"})
+    run_sync(src, dst, unchanged={"main.tex"})
     assert dst.files == {"main.tex": b"new"}
-
-
-@pytest.mark.xfail(
-    reason="-l/-r still decide 'newer' by the project-wide lastUpdated timestamp, so a file changed "
-    "on both sides is overwritten without asking. Two-way sync uses the per-file sync state "
-    "instead (test_two_way_sync.py)"
-)
-def test_differing_newer_file_is_not_overwritten_without_asking(monkeypatch):
-    prompts = Prompts(monkeypatch, confirms=[False])
-    src, dst = FakeSide({"main.tex": b"remote edit"}), FakeSide({"main.tex": b"local edit"})
-    run_sync(src, dst, newer={"main.tex"})
-    assert dst.files == {"main.tex": b"local edit"}
-    assert len(prompts.asked) == 1
 
 
 @pytest.mark.parametrize(
@@ -130,7 +117,7 @@ def test_failure_while_creating_raises_click_exception(monkeypatch):
             create_file_at_from=None,
             from_exists_in_to=lambda name: False,
             from_equal_to_to=None,
-            from_newer_than_to=None,
+            to_unchanged_since_last_sync=None,
             from_name="remote",
             to_name="local",
         )

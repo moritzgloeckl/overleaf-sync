@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- `ols -r` and `ols -l` no longer overwrite changes silently either: they use the same sync history as two-way sync
+  and only overwrite a file without asking if the other side did not change it since the last sync. Previously they
+  decided by comparing timestamps with the project's last update time.
+
 ### Changed
 - **Breaking:** the login (`.olauth`) is now stored as JSON, readable only by you, instead of Python's pickle format
   (loading a pickle file can run arbitrary code). Logins created by 2.0.0a4 or earlier are recognised, but never
@@ -16,7 +21,7 @@ All notable changes to this project are documented here. The format is based on
 ### Changed (internal)
 - The project's file tree is now fetched from Overleaf's real-time service with a small built-in client (HTTP
   long-polling) instead of the unmaintained `socketIO-client` package from 2016, which also drops `websocket-client`
-  as a dependency.
+  as a dependency. `python-dateutil` is no longer needed either.
 
 ### Removed
 - The unused username/password login code, which stopped working when Overleaf introduced captchas.
