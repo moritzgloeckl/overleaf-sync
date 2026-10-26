@@ -27,6 +27,7 @@ All notable changes to this project are documented here. The format is based on
 - Reworked README (quick start, sync model, troubleshooting, migrating from 1.x), new CONTRIBUTING.md and
   RELEASING.md, help texts for all commands, and the `.olignore` help no longer claims it is ignored for remote syncs.
 - An expired session now gives a clear "log in again" message.
+- No more `UserWarning` about colours when the output of `ols` is piped into a file or another program.
 
 ### Removed
 - The unused username/password login code, which stopped working when Overleaf introduced captchas.

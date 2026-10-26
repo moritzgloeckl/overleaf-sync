@@ -40,7 +40,6 @@ name = "olsync"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not integration and not smoke'"
-filterwarnings = ["ignore:color, on_color and attrs are not supported:UserWarning:yaspin"]
 markers = [
     "integration: needs the Overleaf Community Edition container (tests/integration/compose.yml)",
     "smoke: runs against overleaf.com with a real session, local only (see tests/smoke/)",
