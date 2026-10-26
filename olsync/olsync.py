@@ -696,7 +696,8 @@ def sync_func(
 
 
 def execute_action(action, progress_message, success_message, fail_message, verbose_error_logging=False):
-    with yaspin(text=progress_message, color="green") as spinner:
+    # Colours only on a terminal; yaspin warns otherwise (e.g. when the output is piped into a file)
+    with yaspin(text=progress_message, color="green" if sys.stdout.isatty() else None) as spinner:
         try:
             success = action()
         except (RateLimitError, SessionExpiredError) as e:
