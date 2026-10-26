@@ -1,3 +1,3 @@
 """Overleaf Two-Way Sync Tool"""
 
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0"

@@ -23,8 +23,6 @@ pip install "overleaf-sync[gui]"
 
 The `gui` extra installs the login window (Qt via PySide6). Without it, everything works except the login window; log in with [`ols login --cookie`](#login-without-the-login-window) instead. [pipx](https://pipx.pypa.io/) works too: `pipx install "overleaf-sync[gui]"`.
 
-> Until 2.0.0 is final, add `--pre` to install the 2.0 pre-release: `pip install --pre "overleaf-sync[gui]"`.
-
 The command is called `ols`. If another program named `ols` is already on your `PATH`, use `overleaf-sync` instead; it is the same command.
 
 ## Quick start
