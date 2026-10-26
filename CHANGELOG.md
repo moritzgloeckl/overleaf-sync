@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-10-26
+
+First stable release of 2.0. Overleaf changed its website in ways that broke 1.2.0 for everyone; 2.0 makes
+overleaf-sync work again and puts it on a tested footing. The details are in the pre-release sections below. In short,
+compared to 1.2.0:
+
+- **Works with today's overleaf.com again**: listing projects, syncing in both directions (including files in
+  subfolders and binary files), deleting files and downloading the PDF.
+- **Nothing is overwritten silently**: overleaf-sync remembers what each file looked like after the last sync and
+  asks before overwriting changes made on both sides.
+- **Self-hosted Overleaf servers** with `--server`.
+- **Login without the login window** with `ols login --cookie`, e.g. on servers, for single sign-on accounts, or where
+  PySide6 can't be installed.
+- **Clear error messages** for expired sessions, Overleaf's rate limits and a broken login window.
+- **Breaking:** Python 3.11+; the login window is the optional `gui` extra (`pip install "overleaf-sync[gui]"`); run
+  `ols login` once more (new login file format); `--store-path` is now `--auth-file`. See "Migrating from 1.x" in the
+  README.
+
+Thanks to everyone who reported problems and to the contributors whose work is part of 2.0: @warnes, @semihvazgecen,
+@takluyver and @hootandy321, and to the authors of the earlier pull requests that paved the way.
+
 ## [2.0.0rc1] - 2026-10-26
 
 Release candidate for 2.0: everything planned for 2.0 is done. Please test it before the final release.
@@ -118,6 +139,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[2.0.0]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0
 [2.0.0rc1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...v2.0.0rc1
 [2.0.0a4]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a3...v2.0.0a4
 [2.0.0a3]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a2...v2.0.0a3
