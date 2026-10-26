@@ -14,6 +14,7 @@ import json
 import sys
 import time
 import uuid
+from urllib.parse import urlparse
 
 try:
     # Import for pip installation / wheel
@@ -40,6 +41,10 @@ RATE_LIMIT_WAITS = (5, 10, 20, 30)
 
 class RateLimitError(reqs.HTTPError):
     """Overleaf's rate limit was still reached after waiting and retrying"""
+
+
+class SessionExpiredError(Exception):
+    """The persisted session is no longer valid (Overleaf redirects to its login page)"""
 
 
 def _request(method, url, session=None, **kwargs):
@@ -112,6 +117,15 @@ class OverleafClient(object):
             json_content = json_content.get("projects", [])
         return json_content
 
+    def _dashboard(self):
+        """The project dashboard; raises SessionExpiredError if Overleaf sends us to its login page instead"""
+        r = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie)
+        if any(step.is_redirect for step in r.history) and urlparse(r.url).path.rstrip("/").endswith("/login"):
+            raise SessionExpiredError(
+                "Your Overleaf session has expired or is no longer valid. Please log in again with `ols login`."
+            )
+        return r
+
     def fetch_csrf(self):
         """
         Get the CSRF token from the project dashboard, e.g. after logging in with a cookie copied from a browser
@@ -130,8 +144,7 @@ class OverleafClient(object):
         Get all of a user's active projects (= not archived and not trashed)
         Returns: List of project objects
         """
-        projects_page = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie)
-        json_content = OverleafClient._extract_projects(projects_page.content)
+        json_content = OverleafClient._extract_projects(self._dashboard().content)
         return list(OverleafClient.filter_projects(json_content))
 
     def get_project(self, project_name):
@@ -141,8 +154,7 @@ class OverleafClient(object):
         Returns: project object
         """
 
-        projects_page = _request("GET", self._url(PROJECT_PATH), cookies=self._cookie)
-        json_content = OverleafClient._extract_projects(projects_page.content)
+        json_content = OverleafClient._extract_projects(self._dashboard().content)
         return next(OverleafClient.filter_projects(json_content, {"name": project_name}), None)
 
     def download_project(self, project_id):
