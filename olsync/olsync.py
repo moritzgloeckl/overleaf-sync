@@ -11,7 +11,9 @@
 import click
 from datetime import datetime
 import os
+import shutil
 import sys
+import tempfile
 from yaspin import yaspin
 import zipfile
 import io
@@ -440,8 +442,18 @@ def write_file(path, content):
     if _dir != "" and not os.path.exists(_dir):
         os.makedirs(_dir)
 
-    with open(path, "wb+") as f:
-        f.write(content)
+    # Follow an existing symlink, as direct writes did, and replace its target atomically.
+    target = os.path.realpath(path)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target), prefix=".olsync-download.")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
+        if os.path.exists(target):
+            shutil.copymode(target, tmp_path)
+        os.replace(tmp_path, target)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def read_file(path):
