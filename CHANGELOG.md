@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Conflicts show contextual local-to-remote text diffs before a choice, with colors, a 200-line limit, and a binary/non-UTF-8 fallback.
+
 ## [2.0.0] - 2026-10-26
 
 First stable release of 2.0. Overleaf changed its website in ways that broke 1.2.0 for everyone; 2.0 makes

@@ -9,7 +9,9 @@
 ##################################################
 
 import click
+import difflib
 from datetime import datetime
+from itertools import islice
 import os
 import sys
 from yaspin import yaspin
@@ -188,6 +190,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 from_name="remote",
                 to_name="local",
                 verbose=verbose,
+                preview_conflict=lambda name: show_conflict_preview(name, read_file(name), zip_file.read(name)),
             )
             record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["from"]))
         if local:
@@ -210,6 +213,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 from_name="local",
                 to_name="remote",
                 verbose=verbose,
+                preview_conflict=lambda name: show_conflict_preview(name, read_file(name), zip_file.read(name)),
             )
             record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["to"]))
 
@@ -483,6 +487,48 @@ def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
     syncstate.save_state(".", overleaf_client.base_url, project["id"], new_state)
 
 
+def show_conflict_preview(path, local_content, remote_content):
+    """Show a bounded unified diff without interpreting control characters from file contents."""
+
+    def safe(text):
+        return "".join(char if char.isprintable() or char == "\t" else ascii(char)[1:-1] for char in text)
+
+    click.echo(f"\nConflict preview for {safe(path)} (local -> remote):")
+    try:
+        if b"\x00" in local_content or b"\x00" in remote_content:
+            raise ValueError("Binary content")
+        local_text = local_content.decode("utf-8")
+        remote_text = remote_content.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        click.echo(
+            "Binary or non-UTF-8 content differs; no text preview is available "
+            f"(local: {len(local_content)} bytes, remote: {len(remote_content)} bytes)."
+        )
+        return
+
+    limit = 200
+    lines = list(
+        islice(
+            difflib.unified_diff(
+                local_text.splitlines(keepends=True),
+                remote_text.splitlines(keepends=True),
+                fromfile=f"local/{path}",
+                tofile=f"remote/{path}",
+            ),
+            limit + 1,
+        )
+    )
+    for line in lines[:limit]:
+        color = "red" if line.startswith("-") else "green" if line.startswith("+") else None
+        if line.startswith("@@"):
+            color = "cyan"
+        click.secho(safe(line.removesuffix("\n")), fg=color)
+        if not line.endswith("\n"):
+            click.echo("\\ No newline at end of file")
+    if len(lines) > limit:
+        click.echo(f"Preview truncated after {limit} diff lines.")
+
+
 def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_path, verbose=False):
     """
     Two-way sync that decides per file, based on the state of the last sync (see syncstate.py), instead of the
@@ -513,6 +559,7 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
             if path in state
             else "differs between local and Overleaf, and there is no sync history for it yet"
         )
+        show_conflict_preview(path, read(path), remote_content[path])
         choice = click.prompt(
             "\n-> Conflict: <%s> %s.\nKeep the [l]ocal version, keep the [r]emote version or [s]kip?" % (path, reason),
             default="s",
@@ -593,6 +640,7 @@ def sync_func(
     from_name,
     to_name,
     verbose=False,
+    preview_conflict=None,
 ):
     click.echo("\nSyncing files from [%s] to [%s]" % (from_name, to_name))
     click.echo("=" * 40)
@@ -608,12 +656,15 @@ def sync_func(
     for name in files_from:
         if from_exists_in_to(name):
             if not from_equal_to_to(name):
-                if not to_unchanged_since_last_sync(name) and not click.confirm(
-                    "\n-> Warning: file <%s> was changed on [%s] since the last sync (or there is no sync history for "
-                    "it yet).\nOverwrite it with the version from [%s]?" % (name, to_name, from_name)
-                ):
-                    not_sync_list.append(name)
-                    continue
+                if not to_unchanged_since_last_sync(name):
+                    if preview_conflict is not None:
+                        preview_conflict(name)
+                    if not click.confirm(
+                        "\n-> Warning: file <%s> was changed on [%s] since the last sync (or there is no sync history for "
+                        "it yet).\nOverwrite it with the version from [%s]?" % (name, to_name, from_name)
+                    ):
+                        not_sync_list.append(name)
+                        continue
 
                 update_list.append(name)
             else:
