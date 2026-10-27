@@ -23,6 +23,11 @@ JAVASCRIPT_CSRF_EXTRACTOR = "document.getElementsByName('ol-csrfToken')[0].conte
 COOKIE_NAMES = ["overleaf_session2", "GCLB", "overleaf.sid", "sharelatex.sid"]
 
 
+def is_dashboard_url(url, base_url):
+    """True if `url` is the project dashboard of `base_url`, ignoring a query string or a trailing slash"""
+    return url.split("?", 1)[0].rstrip("/") == base_url.rstrip("/") + PROJECT_PATH
+
+
 class OlBrowserLoginWindow(QMainWindow):
     """
     Overleaf Browser Login Utility
@@ -61,7 +66,7 @@ class OlBrowserLoginWindow(QMainWindow):
             self._login_success = True
             QCoreApplication.quit()
 
-        if self.webview.url().toString().rstrip("/") == self._base_url + PROJECT_PATH:
+        if is_dashboard_url(self.webview.url().toString(), self._base_url):
             self.webview.page().runJavaScript(JAVASCRIPT_CSRF_EXTRACTOR, 0, callback)
 
     def handle_cookie_added(self, cookie):
