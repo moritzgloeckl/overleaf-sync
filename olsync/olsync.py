@@ -189,7 +189,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 to_name="local",
                 verbose=verbose,
             )
-            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["from"]))
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=written["from"])
         if local:
             # Computed once (#60)
             local_files = olignore_keep_list(olignore_path)
@@ -211,7 +211,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 to_name="remote",
                 verbose=verbose,
             )
-            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["to"]))
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=written["to"])
 
 
 @main.command()
@@ -461,12 +461,20 @@ def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
     again, so that Overleaf's own changes to uploaded files are not mistaken for remote edits later.
     """
     remote_zip = zip_file
+    refresh_failed = False
     if uploaded:
         try:
             remote_zip = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
         except Exception:
-            remote_zip = zip_file
+            refresh_failed = True
+            click.echo(
+                "Warning: could not refresh the project after uploading; using the uploaded file contents for sync history.",
+                err=True,
+            )
     remote_content = {name: remote_zip.read(name) for name in remote_zip.namelist() if not name.endswith("/")}
+    if refresh_failed:
+        for path in uploaded:
+            remote_content[path] = read_file(path)
     new_state = {}
     for path in sorted(set(remote_content) | set(state)):
         on_both_sides = path in remote_content and os.path.isfile(path)
