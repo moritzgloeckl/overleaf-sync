@@ -177,9 +177,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 deleted_files=deleted_files,
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
                 delete_file_at_to=lambda name: delete_file(name),
-                create_file_at_from=lambda name: overleaf_client.upload_file(
-                    project["id"], project_infos, name, os.path.getsize(name), open(name, "rb")
-                ),
+                create_file_at_from=lambda name: upload_file(overleaf_client, project, project_infos, name),
                 from_exists_in_to=lambda name: os.path.isfile(name),
                 from_equal_to_to=lambda name: open(name, "rb").read() == zip_file.read(name),
                 to_unchanged_since_last_sync=lambda name: unchanged_since_last_sync(
@@ -197,9 +195,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
             written = sync_func(
                 files_from=local_files,
                 deleted_files=deleted_files,
-                create_file_at_to=lambda name: overleaf_client.upload_file(
-                    project["id"], project_infos, name, os.path.getsize(name), open(name, "rb")
-                ),
+                create_file_at_to=lambda name: upload_file(overleaf_client, project, project_infos, name),
                 delete_file_at_to=lambda name: overleaf_client.delete_file(project["id"], project_infos, name),
                 create_file_at_from=lambda name: write_file(name, zip_file.read(name)),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
@@ -429,6 +425,13 @@ def delete_file(path):
         return
     else:
         os.remove(path)
+
+
+def upload_file(overleaf_client, project, project_infos, path):
+    """Upload a local file; raise if Overleaf rejects it, so a failed upload is neither reported nor recorded as synced"""
+    with open(path, "rb") as f:
+        if not overleaf_client.upload_file(project["id"], project_infos, path, os.path.getsize(path), f):
+            raise IOError("Overleaf rejected the upload of %s" % path)
 
 
 def write_file(path, content):
