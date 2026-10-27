@@ -14,6 +14,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import click
+
 # Stored in the sync folder. Dotfiles are never uploaded (glob skips them), so it stays local.
 STATE_FILE = ".olsync-state.json"
 STATE_VERSION = 1
@@ -46,7 +48,15 @@ def load_state(sync_dir, server, project_id):
         or state.get("project_id") != project_id
     ):
         return {}
-    return state.get("files", {})
+    files = state.get("files", {})
+    if not isinstance(files, dict) or any(
+        not isinstance(entry, dict)
+        or any(not isinstance(entry.get(side), str) or not entry[side] for side in ("local", "remote"))
+        for entry in files.values()
+    ):
+        click.echo("Warning: ignoring invalid sync history; conflicting files will require confirmation.", err=True)
+        return {}
+    return files
 
 
 def save_state(sync_dir, server, project_id, files):
