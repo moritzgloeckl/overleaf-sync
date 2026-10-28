@@ -89,10 +89,8 @@ def test_save_state_leaves_no_temporary_files(tmp_path):
         {"main.tex": {"local": "", "remote": "b"}},
     ],
 )
-def test_malformed_history_warns_and_requires_conflict_confirmation(tmp_path, capsys, files):
+def test_malformed_history_is_rejected(tmp_path, files):
     path = tmp_path / syncstate.STATE_FILE
     path.write_text(json.dumps({"version": syncstate.STATE_VERSION, "server": "s", "project_id": "p", "files": files}))
-    state = syncstate.load_state(tmp_path, "s", "p")
-    assert "ignoring invalid sync history" in capsys.readouterr().err
-    assert state == {}
-    assert syncstate.plan_two_way({"main.tex": "local"}, {"main.tex": "remote"}, state)["conflict"] == ["main.tex"]
+    with pytest.raises(syncstate.InvalidStateError):
+        syncstate.load_state(tmp_path, "s", "p")

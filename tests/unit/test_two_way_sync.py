@@ -1,6 +1,7 @@
 """Two-way sync (`ols` without -l/-r) never overwrites changes silently: it decides per file using the sync state."""
 
 import io
+import json
 import os
 import time
 import zipfile
@@ -159,3 +160,22 @@ def test_output_only_lists_sections_with_files(project):
     output, _ = sync()
     assert "[DOWNLOAD]" in output
     assert "[SKIP]" not in output and "[ERROR]" not in output
+
+
+def corrupt_state(project):
+    path = project / ".olsync-state.json"
+    state = json.loads(path.read_text())
+    state["files"]["main.tex"] = []
+    path.write_text(json.dumps(state))
+
+
+def test_malformed_history_warns_and_asks_like_a_first_sync(project):
+    FakeOverleaf.files = {"main.tex": b"v1"}
+    sync()
+    corrupt_state(project)
+    edit_locally(project / "main.tex", b"local edit")
+    output, uploads = sync(input="s\n")
+    assert "ignoring invalid sync history" in output
+    assert "Conflict" in output
+    assert uploads == []
+    assert FakeOverleaf.files["main.tex"] == b"v1"

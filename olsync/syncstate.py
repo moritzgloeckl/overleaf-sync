@@ -14,11 +14,13 @@ import os
 import tempfile
 from pathlib import Path
 
-import click
-
 # Stored in the sync folder. Dotfiles are never uploaded (glob skips them), so it stays local.
 STATE_FILE = ".olsync-state.json"
 STATE_VERSION = 1
+
+
+class InvalidStateError(ValueError):
+    """The state file belongs to this project, but its per-file entries are malformed"""
 
 
 def file_hash(content):
@@ -35,6 +37,7 @@ def load_state(sync_dir, server, project_id):
     Load the per-file state of the last successful sync of this project
     Params: sync_dir, server, project_id
     Returns: {path: {"local": hash, "remote": hash}}, empty if there is no (valid) state for this server and project
+    Raises: InvalidStateError if the state belongs to this server and project, but its per-file entries are malformed
     """
     try:
         with open(Path(sync_dir) / STATE_FILE) as f:
@@ -54,8 +57,8 @@ def load_state(sync_dir, server, project_id):
         or any(not isinstance(entry.get(side), str) or not entry[side] for side in ("local", "remote"))
         for entry in files.values()
     ):
-        click.echo("Warning: ignoring invalid sync history; conflicting files will require confirmation.", err=True)
-        return {}
+        # All or nothing: a partly trusted history could hide a real conflict
+        raise InvalidStateError("malformed per-file entries in %s" % STATE_FILE)
     return files
 
 
