@@ -22,11 +22,11 @@ from pathlib import Path
 
 try:
     # Import for pip installation / wheel
-    from olsync.olclient import BASE_URL, OverleafClient, RateLimitError, SessionExpiredError
+    from olsync.olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
     from olsync import auth, syncstate
 except ImportError:
     # Import for development
-    from olclient import BASE_URL, OverleafClient, RateLimitError, SessionExpiredError
+    from olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
     import auth
     import syncstate
 
@@ -710,7 +710,7 @@ def execute_action(action, progress_message, success_message, fail_message, verb
     with yaspin(text=progress_message, color="green" if sys.stdout.isatty() else None) as spinner:
         try:
             success = action()
-        except (RateLimitError, SessionExpiredError) as e:
+        except (RateLimitError, SessionExpiredError, AmbiguousProjectError) as e:
             # A clear reason is more helpful than the generic failure message
             spinner.fail("💥 ")
             raise click.ClickException(str(e))
