@@ -8,7 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- Multiple active projects with the requested name produce an error instead of silently selecting the first match.
+- Rejected remote deletions fail one-way sync instead of being reported as successful.
+- Malformed per-file sync history is ignored with a warning; differing files still require confirmation.
+- Several active projects with the requested name are an error, instead of silently syncing the first one.
 
 ## [2.0.0] - 2026-10-26
 

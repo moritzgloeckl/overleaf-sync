@@ -54,7 +54,10 @@ jobs:
 
   integration:
     # Runs the integration tests against a local Overleaf Community Edition (tests/integration/compose.yml)
-    runs-on: ubuntu-latest
+    # ubuntu-22.04 (kernel 6.8), not -latest: MongoDB 8 (Overleaf's minimum) exits on start on kernels 6.19 to
+    # 7.0.13 (SERVER-121912), and ubuntu-24.04 runs 7.0.0-azure since 2026-10-25. Ubuntu keeps reporting 7.0.0 even
+    # with upstream fixes, so MongoDB's check rejects it regardless; move back once SERVER-136848 is fixed.
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -64,12 +67,12 @@ jobs:
       - name: System libraries for Qt WebEngine (the login window test runs Qt offscreen)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libnss3 libasound2t64 \
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libnss3 libasound2 \
             libxcomposite1 libxdamage1 libxrandr2 libxkbfile1 libxshmfence1 libgbm1 libxtst6 > /dev/null
       - run: pip install -e ".[dev,gui]"
       - name: Start Overleaf Community Edition
         run: docker compose -f tests/integration/compose.yml up -d --wait --wait-timeout 900
       - run: pytest -m integration -v --keep-ce
-      - name: Overleaf logs on failure
+      - name: Container logs on failure
         if: failure()
-        run: docker compose -f tests/integration/compose.yml logs sharelatex --tail 200
+        run: docker compose -f tests/integration/compose.yml logs --tail 200
