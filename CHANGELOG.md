@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - Rejected remote deletions fail one-way sync instead of being reported as successful.
+- Malformed per-file sync history is ignored with a warning; differing files still require confirmation.
 
 ## [2.0.0] - 2026-10-26
 
