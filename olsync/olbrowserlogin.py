@@ -24,8 +24,8 @@ COOKIE_NAMES = ["overleaf_session2", "GCLB", "overleaf.sid", "sharelatex.sid"]
 
 
 def is_dashboard_url(url, base_url):
-    """True if `url` is the project dashboard of `base_url`, ignoring a query string or a trailing slash"""
-    return url.split("?", 1)[0].rstrip("/") == base_url.rstrip("/") + PROJECT_PATH
+    """True if `url` is the project dashboard of `base_url`, ignoring a query string, a fragment or a trailing slash"""
+    return url.split("#", 1)[0].split("?", 1)[0].rstrip("/") == base_url.rstrip("/") + PROJECT_PATH
 
 
 class OlBrowserLoginWindow(QMainWindow):

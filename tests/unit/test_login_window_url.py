@@ -40,6 +40,10 @@ def olbrowserlogin(monkeypatch):
         "https://www.overleaf.com/project?",
         "https://www.overleaf.com/project?ref=login",
         "https://www.overleaf.com/project/?ref=login",
+        "https://www.overleaf.com/project#",
+        "https://www.overleaf.com/project#projects",
+        "https://www.overleaf.com/project/#projects",
+        "https://www.overleaf.com/project?ref=login#projects",
     ],
 )
 def test_dashboard_url_is_detected(olbrowserlogin, url):
