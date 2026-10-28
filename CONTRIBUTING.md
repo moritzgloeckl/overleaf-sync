@@ -37,7 +37,7 @@ The tests are written with pytest and come in three kinds:
 
 **Unit tests** fake Overleaf with [`responses`](https://github.com/getsentry/responses) or small fake clients and run in under a second.
 
-**Integration tests** run against a real Overleaf Community Edition in Docker (`tests/integration/compose.yml`). The tests start it automatically when nothing answers on `http://127.0.0.1:8080`, create a test user and projects, and stop it again afterwards (pass `--keep-ce` to keep it running between runs). The image is amd64-only: on Apple Silicon, enable Rosetta in Docker Desktop. The first start can take several minutes. To start it yourself:
+**Integration tests** run against a real Overleaf Community Edition in Docker (`tests/integration/compose.yml`). The tests start it automatically when nothing answers on `http://127.0.0.1:8080`, create a test user and projects, and stop it again afterwards (pass `--keep-ce` to keep it running between runs). The image is amd64-only: on Apple Silicon, enable Rosetta in Docker Desktop. The first start can take several minutes. MongoDB 8, which Overleaf needs, refuses to start on Linux kernels 6.19 to 7.0.13 ("Linux kernel versions 6.19 and newer has a known incompatibility", [SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)); this includes current Docker Desktop. If you hit that, mention it in your PR: CI runs the integration tests for you. To start it yourself:
 
 ```bash
 docker compose -f tests/integration/compose.yml up -d --wait

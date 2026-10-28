@@ -54,8 +54,9 @@ jobs:
 
   integration:
     # Runs the integration tests against a local Overleaf Community Edition (tests/integration/compose.yml)
-    # ubuntu-22.04, not -latest: MongoDB 8 (Overleaf's minimum) refuses to start on kernels 6.19 to 7.0.13
-    # (SERVER-121912), and ubuntu-24.04 runs 7.0.0-azure since 2026-10-25. Move back once its kernel is 7.0.14+.
+    # ubuntu-22.04 (kernel 6.8), not -latest: MongoDB 8 (Overleaf's minimum) exits on start on kernels 6.19 to
+    # 7.0.13 (SERVER-121912), and ubuntu-24.04 runs 7.0.0-azure since 2026-10-25. Ubuntu keeps reporting 7.0.0 even
+    # with upstream fixes, so MongoDB's check rejects it regardless; move back once SERVER-136848 is fixed.
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
