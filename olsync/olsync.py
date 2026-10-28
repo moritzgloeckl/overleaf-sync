@@ -432,10 +432,15 @@ def delete_file(path):
 
 
 def upload_file(overleaf_client, project, project_infos, path):
-    """Upload a stable snapshot and return its hash; rejected uploads raise an error."""
+    """
+    Upload a local file, read once, so a save during the upload cannot mix two versions
+    Params: overleaf_client, project, project_infos, path
+    Returns: the hash of the uploaded bytes, for the sync state
+    Raises: IOError if Overleaf rejects the upload, so a failed upload is neither reported nor recorded as synced
+    """
     content = read_file(path)
     if not overleaf_client.upload_file(project["id"], project_infos, path, len(content), io.BytesIO(content)):
-        raise IOError("Overleaf rejected upload of %s" % path)
+        raise IOError("Overleaf rejected the upload of %s" % path)
     return syncstate.file_hash(content)
 
 
