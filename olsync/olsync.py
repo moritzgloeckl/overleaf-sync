@@ -22,11 +22,11 @@ from pathlib import Path
 
 try:
     # Import for pip installation / wheel
-    from olsync.olclient import BASE_URL, OverleafClient, RateLimitError, SessionExpiredError
+    from olsync.olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
     from olsync import auth, syncstate
 except ImportError:
     # Import for development
-    from olclient import BASE_URL, OverleafClient, RateLimitError, SessionExpiredError
+    from olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
     import auth
     import syncstate
 
@@ -167,7 +167,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
             return
 
         sync = False  # -l and -r below sync in one direction only
-        state = syncstate.load_state(".", overleaf_client.base_url, project["id"])
+        state = load_sync_state(overleaf_client.base_url, project["id"])
         uploaded = {}
 
         def upload(name):
@@ -457,6 +457,15 @@ def read_file(path):
         return f.read()
 
 
+def load_sync_state(server, project_id):
+    """syncstate.load_state for the sync folder (the CWD); malformed history is ignored with a warning"""
+    try:
+        return syncstate.load_state(".", server, project_id)
+    except syncstate.InvalidStateError:
+        click.echo("Warning: ignoring invalid sync history; conflicting files will require confirmation.", err=True)
+        return {}
+
+
 def unchanged_since_last_sync(state, path, side, content):
     """True if `side` ("local" or "remote") of `path` still has the content recorded at the last sync"""
     return state.get(path, {}).get(side) == syncstate.file_hash(content)
@@ -513,7 +522,7 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
     local_paths = set(olignore_keep_list(olignore_path)) | {name for name in remote_content if os.path.isfile(name)}
     local = {path: syncstate.file_hash(read(path)) for path in local_paths}
     remote = {name: syncstate.file_hash(content) for name, content in remote_content.items()}
-    state = syncstate.load_state(".", server, project["id"])
+    state = load_sync_state(server, project["id"])
     plan = syncstate.plan_two_way(local, remote, state)
 
     click.echo("\nSyncing files between [local] and [remote]")
@@ -687,11 +696,12 @@ def sync_func(
     for name in delete_list:
         click.echo("\t%s" % name)
         try:
-            delete_file_at_to(name)
+            if delete_file_at_to(name) is False:
+                raise OSError("Deletion was rejected")
         except:
             if verbose:
                 print(traceback.format_exc())
-            raise click.ClickException("\n[ERROR] An error occurred while creating new file(s) on [%s]" % to_name)
+            raise click.ClickException("\n[ERROR] An error occurred while deleting file(s) on [%s]" % to_name)
 
     click.echo("\n[SYNC] Following file(s) are up to date")
     for name in synced_list:
@@ -718,7 +728,7 @@ def execute_action(action, progress_message, success_message, fail_message, verb
     with yaspin(text=progress_message, color="green" if sys.stdout.isatty() else None) as spinner:
         try:
             success = action()
-        except (RateLimitError, SessionExpiredError) as e:
+        except (RateLimitError, SessionExpiredError, AmbiguousProjectError) as e:
             # A clear reason is more helpful than the generic failure message
             spinner.fail("💥 ")
             raise click.ClickException(str(e))

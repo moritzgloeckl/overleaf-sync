@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- Rejected remote deletions fail one-way sync instead of being reported as successful.
+- Malformed per-file sync history is ignored with a warning; differing files still require confirmation.
+- Several active projects with the requested name are an error, instead of silently syncing the first one.
+- The login window recognizes successful dashboard redirects even when the URL contains query parameters or a fragment.
 - Uploads use stable snapshots and history records transferred contents, keeping later local and unrelated remote edits pending.
 
 ## [2.0.0] - 2026-10-26
