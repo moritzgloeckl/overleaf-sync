@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format is based on
 - Uploads use stable snapshots and history records transferred contents, keeping later local and unrelated remote edits pending.
 - If refreshing the project after an upload fails, history uses the uploaded contents with a warning instead of the stale archive.
 - One-way sync reports rejected uploads as errors and leaves their sync history unchanged.
+- Downloaded files are replaced atomically so failed writes preserve the previous copy, permissions, and symlinks.
 
 ## [2.0.0] - 2026-10-26
 
