@@ -1,6 +1,7 @@
 """-r and -l only overwrite a file without asking if the target side did not change it since the last sync."""
 
 import io
+import json
 import os
 import time
 import zipfile
@@ -156,3 +157,17 @@ def test_skipped_file_stays_unsynced(project):
     ols("-r", input="n\n")
     output = ols("-r", input="n\n")
     assert "main.tex" in output and "changed" in output
+
+
+def test_malformed_history_warns_and_asks_before_overwriting(project):
+    FakeOverleaf.files = {"main.tex": b"v1"}
+    ols()
+    path = project / ".olsync-state.json"
+    state = json.loads(path.read_text())
+    state["files"]["main.tex"] = []
+    path.write_text(json.dumps(state))
+    edit_locally(project / "main.tex", b"local edit")
+    output = ols("-l", input="n\n")
+    assert "ignoring invalid sync history" in output
+    assert "Overwrite it" in output
+    assert FakeOverleaf.files["main.tex"] == b"v1"

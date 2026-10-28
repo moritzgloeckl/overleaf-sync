@@ -151,6 +151,7 @@ The server is stored with the login, so `ols`, `ols list` and `ols download` use
 - **"… was created by an older version of overleaf-sync"**: the login format changed in 2.0. Run `ols login` again.
 - **"Overleaf's rate limit was reached"**: Overleaf limits how many requests you can make per minute (e.g. project downloads). overleaf-sync already waits and retries; if it still fails, wait a minute.
 - **"Project could not be queried"**: check the project name (`ols list`), or pass it with `-n`.
+- **"Multiple active projects are named …"**: overleaf-sync finds projects by name and won't guess between projects with the same name. Rename one of them in Overleaf (or archive it).
 - **The login window doesn't open or crashes**: Qt can conflict with other Qt installations (e.g. Anaconda's). Install overleaf-sync in a fresh virtual environment based on a non-conda Python, or use [`ols login --cookie`](#login-without-the-login-window).
 - **`ols: no description file specified`** or other unexpected output: another program called `ols` is on your `PATH`. Use `overleaf-sync` instead.
 - **A change you just made in Overleaf's web editor isn't picked up**: give Overleaf a moment to save it, then sync again.

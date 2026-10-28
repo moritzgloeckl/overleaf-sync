@@ -19,6 +19,10 @@ STATE_FILE = ".olsync-state.json"
 STATE_VERSION = 1
 
 
+class InvalidStateError(ValueError):
+    """The state file belongs to this project, but its per-file entries are malformed"""
+
+
 def file_hash(content):
     """
     Content hash used to detect changes
@@ -33,6 +37,7 @@ def load_state(sync_dir, server, project_id):
     Load the per-file state of the last successful sync of this project
     Params: sync_dir, server, project_id
     Returns: {path: {"local": hash, "remote": hash}}, empty if there is no (valid) state for this server and project
+    Raises: InvalidStateError if the state belongs to this server and project, but its per-file entries are malformed
     """
     try:
         with open(Path(sync_dir) / STATE_FILE) as f:
@@ -46,7 +51,15 @@ def load_state(sync_dir, server, project_id):
         or state.get("project_id") != project_id
     ):
         return {}
-    return state.get("files", {})
+    files = state.get("files", {})
+    if not isinstance(files, dict) or any(
+        not isinstance(entry, dict)
+        or any(not isinstance(entry.get(side), str) or not entry[side] for side in ("local", "remote"))
+        for entry in files.values()
+    ):
+        # All or nothing: a partly trusted history could hide a real conflict
+        raise InvalidStateError("malformed per-file entries in %s" % STATE_FILE)
+    return files
 
 
 def save_state(sync_dir, server, project_id, files):
