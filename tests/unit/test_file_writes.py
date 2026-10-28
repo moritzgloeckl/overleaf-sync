@@ -61,6 +61,18 @@ def test_replacement_preserves_existing_permissions(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o640
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file permissions")
+@pytest.mark.parametrize("umask", [0o022, 0o077])
+def test_new_file_gets_default_permissions(tmp_path, umask):
+    # Like open() did before the atomic replace: 0o666 minus the umask, not mkstemp's 0o600
+    previous = os.umask(umask)
+    try:
+        cli.write_file(str(tmp_path / "new.tex"), b"content")
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE((tmp_path / "new.tex").stat().st_mode) == 0o666 & ~umask
+
+
 @pytest.mark.skipif(os.name == "nt", reason="Creating symlinks can require elevated privileges")
 def test_replacement_preserves_symlink_and_updates_its_target(tmp_path):
     target = tmp_path / "actual.tex"

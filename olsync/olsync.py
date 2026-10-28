@@ -13,7 +13,7 @@ from datetime import datetime
 import os
 import shutil
 import sys
-import tempfile
+import uuid
 from yaspin import yaspin
 import zipfile
 import io
@@ -457,7 +457,9 @@ def write_file(path, content):
 
     # Follow an existing symlink, as direct writes did, and replace its target atomically.
     target = os.path.realpath(path)
-    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target), prefix=".olsync-download.")
+    tmp_path = os.path.join(os.path.dirname(target), ".olsync-download." + uuid.uuid4().hex)
+    # Mode 0o666 like open(), so a new file gets the umask's permissions (mkstemp would make it 0o600)
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(content)
