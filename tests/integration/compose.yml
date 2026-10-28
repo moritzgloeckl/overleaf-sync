@@ -36,7 +36,8 @@ services:
       start_period: 60s
 
   mongo:
-    image: mongo:8.0
+    # Pinned to the patch release: since mongo:8.0 moved to 8.0.34 (2026-10-27), the container exits on start in CI
+    image: mongo:8.0.32
     command: "--replSet overleaf"
     volumes:
       - mongo_data:/data/db

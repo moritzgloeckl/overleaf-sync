@@ -70,6 +70,6 @@ jobs:
       - name: Start Overleaf Community Edition
         run: docker compose -f tests/integration/compose.yml up -d --wait --wait-timeout 900
       - run: pytest -m integration -v --keep-ce
-      - name: Overleaf logs on failure
+      - name: Container logs on failure
         if: failure()
-        run: docker compose -f tests/integration/compose.yml logs sharelatex --tail 200
+        run: docker compose -f tests/integration/compose.yml logs --tail 200
