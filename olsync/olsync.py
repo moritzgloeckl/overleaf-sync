@@ -168,6 +168,10 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
 
         sync = False  # -l and -r below sync in one direction only
         state = load_sync_state(overleaf_client.base_url, project["id"])
+        uploaded = {}
+
+        def upload(name):
+            uploaded[name] = upload_file(overleaf_client, project, project_infos, name)
 
         if remote:
             remote_files = zip_file.namelist()
@@ -177,9 +181,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 deleted_files=deleted_files,
                 create_file_at_to=lambda name: write_file(name, zip_file.read(name)),
                 delete_file_at_to=lambda name: delete_file(name),
-                create_file_at_from=lambda name: overleaf_client.upload_file(
-                    project["id"], project_infos, name, os.path.getsize(name), open(name, "rb")
-                ),
+                create_file_at_from=upload,
                 from_exists_in_to=lambda name: os.path.isfile(name),
                 from_equal_to_to=lambda name: open(name, "rb").read() == zip_file.read(name),
                 to_unchanged_since_last_sync=lambda name: unchanged_since_last_sync(
@@ -189,7 +191,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 to_name="local",
                 verbose=verbose,
             )
-            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["from"]))
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=uploaded)
         if local:
             # Computed once (#60)
             local_files = olignore_keep_list(olignore_path)
@@ -197,9 +199,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
             written = sync_func(
                 files_from=local_files,
                 deleted_files=deleted_files,
-                create_file_at_to=lambda name: overleaf_client.upload_file(
-                    project["id"], project_infos, name, os.path.getsize(name), open(name, "rb")
-                ),
+                create_file_at_to=upload,
                 delete_file_at_to=lambda name: overleaf_client.delete_file(project["id"], project_infos, name),
                 create_file_at_from=lambda name: write_file(name, zip_file.read(name)),
                 from_exists_in_to=lambda name: name in zip_file.namelist(),
@@ -211,7 +211,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
                 to_name="remote",
                 verbose=verbose,
             )
-            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=bool(written["to"]))
+            record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=uploaded)
 
 
 @main.command()
@@ -431,6 +431,19 @@ def delete_file(path):
         os.remove(path)
 
 
+def upload_file(overleaf_client, project, project_infos, path):
+    """
+    Upload a local file, read once, so a save during the upload cannot mix two versions
+    Params: overleaf_client, project, project_infos, path
+    Returns: the hash of the uploaded bytes, for the sync state
+    Raises: IOError if Overleaf rejects the upload, so a failed upload is neither reported nor recorded as synced
+    """
+    content = read_file(path)
+    if not overleaf_client.upload_file(project["id"], project_infos, path, len(content), io.BytesIO(content)):
+        raise IOError("Overleaf rejected the upload of %s" % path)
+    return syncstate.file_hash(content)
+
+
 def write_file(path, content):
     _dir = os.path.dirname(path)
     if _dir == path:
@@ -465,29 +478,42 @@ def unchanged_since_last_sync(state, path, side, content):
 
 def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
     """
-    Record the sync state after a one-way sync (-l/-r): files that were synced, or are identical on both sides, get
-    their current hashes; other files (e.g. skipped ones) keep their previous state. After uploads, the project is read
-    again, so that Overleaf's own changes to uploaded files are not mistaken for remote edits later.
+    Record the sync state after a one-way sync (-l/-r): transferred files get the hashes of the bytes that were sent or
+    written, so edits made during the sync stay pending; files identical on both sides get their current hashes; other
+    files (e.g. skipped ones) keep their previous state. After uploads, the uploaded files are read from the project
+    again, so that Overleaf's own changes to them are not mistaken for remote edits later.
+    Params: synced, the paths written on the target side; uploaded, {path: hash of the uploaded bytes}
     """
-    remote_zip = zip_file
+    remote = {name: syncstate.file_hash(zip_file.read(name)) for name in zip_file.namelist() if not name.endswith("/")}
     if uploaded:
+        previous_remote = remote.copy()
         try:
-            remote_zip = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
+            fresh = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
+            for path in uploaded:
+                if path in fresh.namelist():
+                    remote[path] = syncstate.file_hash(fresh.read(path))
+                else:
+                    remote.pop(path, None)
         except Exception:
-            remote_zip = zip_file
-    remote_content = {name: remote_zip.read(name) for name in remote_zip.namelist() if not name.endswith("/")}
+            # The zip from before the sync has the old remote version of the uploaded files; use what was uploaded
+            click.echo(
+                "Warning: could not refresh the project after uploading; using the uploaded file contents for sync history.",
+                err=True,
+            )
+            remote = previous_remote
+            remote.update(uploaded)
     new_state = {}
-    for path in sorted(set(remote_content) | set(state)):
-        on_both_sides = path in remote_content and os.path.isfile(path)
+    for path in sorted(set(remote) | set(state)):
+        on_both_sides = path in remote and os.path.isfile(path)
         if on_both_sides:
-            local = read_file(path)
-            if path in synced or local == remote_content[path]:
+            local = syncstate.file_hash(read_file(path))
+            if path in uploaded or path in synced or local == remote[path]:
                 new_state[path] = {
-                    "local": syncstate.file_hash(local),
-                    "remote": syncstate.file_hash(remote_content[path]),
+                    "local": uploaded.get(path, remote[path] if path in synced else local),
+                    "remote": remote[path],
                 }
                 continue
-        if path in state and (on_both_sides or path in remote_content or os.path.isfile(path)):
+        if path in state and (path in remote or os.path.isfile(path)):
             new_state[path] = state[path]
     syncstate.save_state(".", overleaf_client.base_url, project["id"], new_state)
 
@@ -533,14 +559,15 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
     for path in downloads:
         try:
             write_file(path, remote_content[path])
+            local[path] = remote[path]
         except OSError:
             if verbose:
                 print(traceback.format_exc())
             failed.append(path)
     for path in uploads:
         try:
-            with open(path, "rb") as f:
-                ok = overleaf_client.upload_file(project["id"], project_infos, path, os.path.getsize(path), f)
+            local[path] = upload_file(overleaf_client, project, project_infos, path)
+            ok = True
         except Exception:
             if verbose:
                 print(traceback.format_exc())
@@ -565,21 +592,25 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
     if set(uploads) - set(failed):
         try:
             fresh = zipfile.ZipFile(io.BytesIO(overleaf_client.download_project(project["id"])))
-            remote_content = {name: fresh.read(name) for name in fresh.namelist() if not name.endswith("/")}
+            for path in set(uploads) - set(failed):
+                if path in fresh.namelist():
+                    remote[path] = syncstate.file_hash(fresh.read(path))
+                else:
+                    remote.pop(path, None)
         except Exception:
             if verbose:
                 print(traceback.format_exc())
             for path in set(uploads) - set(failed):
-                remote_content[path] = read(path)
+                remote[path] = local[path]
     new_state = {}
-    for path in sorted(set(local_paths) | set(remote_content) | set(downloads)):
+    for path in sorted(set(local_paths) | set(remote) | set(downloads)):
         if path in skipped or path in failed:
             if path in state:
                 new_state[path] = state[path]
-        elif path in remote_content and os.path.isfile(path):
+        elif path in remote and os.path.isfile(path):
             new_state[path] = {
-                "local": syncstate.file_hash(read(path)),
-                "remote": syncstate.file_hash(remote_content[path]),
+                "local": local[path],
+                "remote": remote[path],
             }
     syncstate.save_state(".", server, project["id"], new_state)
 

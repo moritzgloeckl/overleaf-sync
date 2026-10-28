@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format is based on
 - Malformed per-file sync history is ignored with a warning; differing files still require confirmation.
 - Several active projects with the requested name are an error, instead of silently syncing the first one.
 - The login window recognizes successful dashboard redirects even when the URL contains query parameters or a fragment.
+- Uploads use stable snapshots and history records transferred contents, keeping later local and unrelated remote edits pending.
+- If refreshing the project after an upload fails, history uses the uploaded contents with a warning instead of the stale archive.
+- One-way sync reports rejected uploads as errors and leaves their sync history unchanged.
 
 ## [2.0.0] - 2026-10-26
 
