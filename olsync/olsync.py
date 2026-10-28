@@ -472,10 +472,12 @@ def unchanged_since_last_sync(state, path, side, content):
 
 
 def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
-    """Record transferred snapshots, keeping edits made during sync pending for the next run.
-
-    uploaded maps each successfully uploaded path to the hash of the bytes sent. Only those paths use the
-    refreshed archive, so a remote edit to an unrelated file is not mistaken for a completed download.
+    """
+    Record the sync state after a one-way sync (-l/-r): transferred files get the hashes of the bytes that were sent or
+    written, so edits made during the sync stay pending; files identical on both sides get their current hashes; other
+    files (e.g. skipped ones) keep their previous state. After uploads, the uploaded files are read from the project
+    again, so that Overleaf's own changes to them are not mistaken for remote edits later.
+    Params: synced, the paths written on the target side; uploaded, {path: hash of the uploaded bytes}
     """
     remote = {name: syncstate.file_hash(zip_file.read(name)) for name in zip_file.namelist() if not name.endswith("/")}
     if uploaded:
@@ -488,7 +490,13 @@ def record_state(overleaf_client, project, zip_file, state, synced, uploaded):
                 else:
                     remote.pop(path, None)
         except Exception:
+            # The zip from before the sync has the old remote version of the uploaded files; use what was uploaded
+            click.echo(
+                "Warning: could not refresh the project after uploading; using the uploaded file contents for sync history.",
+                err=True,
+            )
             remote = previous_remote
+            remote.update(uploaded)
     new_state = {}
     for path in sorted(set(remote) | set(state)):
         on_both_sides = path in remote and os.path.isfile(path)

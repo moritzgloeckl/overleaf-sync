@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format is based on
 - Several active projects with the requested name are an error, instead of silently syncing the first one.
 - The login window recognizes successful dashboard redirects even when the URL contains query parameters or a fragment.
 - Uploads use stable snapshots and history records transferred contents, keeping later local and unrelated remote edits pending.
+- If refreshing the project after an upload fails, history uses the uploaded contents with a warning instead of the stale archive.
 
 ## [2.0.0] - 2026-10-26
 
