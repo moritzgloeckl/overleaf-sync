@@ -10,6 +10,22 @@ All notable changes to this project are documented here. The format is based on
 
 - Conflicts show contextual local-to-remote text diffs before a choice, with colors, a 200-line limit, and a binary/non-UTF-8 fallback.
 
+## [2.0.1] - 2026-10-28
+
+Bug fixes: safer downloads, uploads and sync history, and clearer errors instead of silent failures. Thanks to @lepotatoguy,
+who contributed all of them.
+
+### Fixed
+
+- Rejected remote deletions fail one-way sync instead of being reported as successful.
+- Malformed per-file sync history is ignored with a warning; differing files still require confirmation.
+- Several active projects with the requested name are an error, instead of silently syncing the first one.
+- The login window recognizes successful dashboard redirects even when the URL contains query parameters or a fragment.
+- Uploads use stable snapshots and history records transferred contents, keeping later local and unrelated remote edits pending.
+- If refreshing the project after an upload fails, history uses the uploaded contents with a warning instead of the stale archive.
+- One-way sync reports rejected uploads as errors and leaves their sync history unchanged.
+- Downloaded files are replaced atomically so failed writes preserve the previous copy, permissions, and symlinks.
+
 ## [2.0.0] - 2026-10-26
 
 First stable release of 2.0. Overleaf changed its website in ways that broke 1.2.0 for everyone; 2.0 makes
@@ -145,6 +161,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[2.0.1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0
 [2.0.0rc1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...v2.0.0rc1
 [2.0.0a4]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a3...v2.0.0a4

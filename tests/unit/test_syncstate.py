@@ -74,3 +74,23 @@ def test_missing_or_corrupt_state_is_empty(tmp_path):
 def test_save_state_leaves_no_temporary_files(tmp_path):
     syncstate.save_state(tmp_path, "s", "p", {})
     assert [p.name for p in tmp_path.iterdir()] == [".olsync-state.json"]
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        None,
+        [],
+        "invalid",
+        42,
+        {"main.tex": []},
+        {"main.tex": {"local": 1, "remote": "b"}},
+        {"main.tex": {"local": "a"}},
+        {"main.tex": {"local": "", "remote": "b"}},
+    ],
+)
+def test_malformed_history_is_rejected(tmp_path, files):
+    path = tmp_path / syncstate.STATE_FILE
+    path.write_text(json.dumps({"version": syncstate.STATE_VERSION, "server": "s", "project_id": "p", "files": files}))
+    with pytest.raises(syncstate.InvalidStateError):
+        syncstate.load_state(tmp_path, "s", "p")

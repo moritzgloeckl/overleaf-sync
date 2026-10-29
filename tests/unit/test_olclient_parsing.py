@@ -52,3 +52,47 @@ def test_get_project_2026_dashboard(dashboard):
 def test_get_project_unknown_name_returns_none(dashboard):
     dashboard("dashboard_old.html")
     assert OverleafClient({}, "csrf").get_project("Nope") is None
+
+
+def test_duplicate_active_project_names_are_rejected(monkeypatch):
+    client = OverleafClient({}, "csrf")
+    monkeypatch.setattr(client, "_dashboard", lambda: type("Page", (), {"content": b""})())
+    monkeypatch.setattr(
+        OverleafClient,
+        "_extract_projects",
+        staticmethod(lambda _: [{"id": "p1", "name": "Paper"}, {"id": "p2", "name": "Paper"}]),
+    )
+    with pytest.raises(ValueError, match="Multiple active projects"):
+        client.get_project("Paper")
+
+
+def test_inactive_duplicates_do_not_make_a_project_ambiguous(monkeypatch):
+    client = OverleafClient({}, "csrf")
+    monkeypatch.setattr(client, "_dashboard", lambda: type("Page", (), {"content": b""})())
+    monkeypatch.setattr(
+        OverleafClient,
+        "_extract_projects",
+        staticmethod(
+            lambda _: [
+                {"id": "p1", "name": "Paper"},
+                {"id": "p2", "name": "Paper", "archived": True},
+                {"id": "p3", "name": "Paper", "trashed": True},
+            ]
+        ),
+    )
+    assert client.get_project("Paper")["id"] == "p1"
+
+
+def test_cli_explains_ambiguous_project_names(monkeypatch):
+    import click
+    from olsync import olsync as cli
+
+    client = OverleafClient({}, "csrf")
+    monkeypatch.setattr(client, "_dashboard", lambda: type("Page", (), {"content": b""})())
+    monkeypatch.setattr(
+        OverleafClient,
+        "_extract_projects",
+        staticmethod(lambda _: [{"id": "p1", "name": "Paper"}, {"id": "p2", "name": "Paper"}]),
+    )
+    with pytest.raises(click.ClickException, match="Multiple active projects"):
+        cli.execute_action(lambda: client.get_project("Paper"), "Querying", "Done", "Query failed")
