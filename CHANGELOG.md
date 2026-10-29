@@ -8,7 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- Conflicts show contextual local-to-remote text diffs before a choice, with colors, a 200-line limit, and a binary/non-UTF-8 fallback.
+- Conflict and one-way overwrite prompts offer `d` to preview a local-to-remote diff, then ask again. Previews have colors, a 200-line limit, and a binary/non-UTF-8 fallback.
+- Conflict previews normalize line endings, identifying line-ending-only differences in a short message and noting different endings alongside text edits. File contents and sync decisions are unchanged.
 
 ## [2.0.1] - 2026-10-28
 

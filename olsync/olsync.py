@@ -555,6 +555,27 @@ def show_conflict_preview(path, local_content, remote_content):
         )
         return
 
+    def normalize(text):
+        endings = []
+        if "\r\n" in text:
+            endings.append("CRLF")
+        bare = text.replace("\r\n", "")
+        if "\r" in bare:
+            endings.append("CR")
+        if "\n" in bare:
+            endings.append("LF")
+        description = "mixed (%s)" % ", ".join(endings) if len(endings) > 1 else next(iter(endings), "none")
+        return text.replace("\r\n", "\n").replace("\r", "\n"), description
+
+    local_text, local_endings = normalize(local_text)
+    remote_text, remote_endings = normalize(remote_text)
+    description = f"{local_endings} locally, {remote_endings} on Overleaf"
+    if local_text == remote_text and local_content != remote_content:
+        click.echo(f"Only the line endings differ ({description}).")
+        return
+    if local_endings != remote_endings:
+        click.echo(f"Line endings differ ({description}); showing text with normalized line endings.")
+
     limit = 200
     lines = list(
         islice(
@@ -608,12 +629,16 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
             if path in state
             else "differs between local and Overleaf, and there is no sync history for it yet"
         )
-        show_conflict_preview(path, read(path), remote_content[path])
-        choice = click.prompt(
-            "\n-> Conflict: <%s> %s.\nKeep the [l]ocal version, keep the [r]emote version or [s]kip?" % (path, reason),
-            default="s",
-            type=click.Choice(["l", "r", "s"]),
-        )
+        while True:
+            choice = click.prompt(
+                "\n-> Conflict: <%s> %s.\nKeep the [l]ocal version, keep the [r]emote version, [s]kip or view [d]iff?"
+                % (path, reason),
+                default="s",
+                type=click.Choice(["l", "r", "s", "d"]),
+            )
+            if choice != "d":
+                break
+            show_conflict_preview(path, read(path), remote_content[path])
         {"l": uploads, "r": downloads, "s": skipped}[choice].append(path)
 
     failed = []
@@ -711,12 +736,25 @@ def sync_func(
         if from_exists_in_to(name):
             if not from_equal_to_to(name):
                 if not to_unchanged_since_last_sync(name):
-                    if preview_conflict is not None:
-                        preview_conflict(name)
-                    if not click.confirm(
+                    prompt = (
                         "\n-> Warning: file <%s> was changed on [%s] since the last sync (or there is no sync history for "
                         "it yet).\nOverwrite it with the version from [%s]?" % (name, to_name, from_name)
-                    ):
+                    )
+                    if preview_conflict is None:
+                        overwrite = click.confirm(prompt)
+                    else:
+                        while True:
+                            choice = click.prompt(
+                                prompt + " (y/n/[d]iff)",
+                                default="n",
+                                type=click.Choice(["y", "yes", "n", "no", "d"], case_sensitive=False),
+                                show_choices=False,
+                            )
+                            if choice != "d":
+                                break
+                            preview_conflict(name)
+                        overwrite = choice in ("y", "yes")
+                    if not overwrite:
                         not_sync_list.append(name)
                         continue
 

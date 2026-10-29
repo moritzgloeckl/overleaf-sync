@@ -1,6 +1,7 @@
 """Readable conflict diffs must remain bounded and safe for terminal output."""
 
 import click
+import pytest
 from click.testing import CliRunner
 
 from olsync import olsync as cli
@@ -45,3 +46,34 @@ def test_utf8_text_is_readable():
     output = preview("café\n".encode(), "café corrigé\n".encode())
     assert "-café" in output
     assert "+café corrigé" in output
+
+
+@pytest.mark.parametrize(
+    ("local", "remote", "description"),
+    [
+        (b"same\r\n", b"same\n", "CRLF locally, LF on Overleaf"),
+        (b"same\n", b"same\r\n", "LF locally, CRLF on Overleaf"),
+        (b"same\r", b"same\n", "CR locally, LF on Overleaf"),
+        (b"one\r\ntwo\n", b"one\ntwo\n", "mixed (CRLF, LF) locally, LF on Overleaf"),
+    ],
+)
+def test_only_line_endings_differ(local, remote, description):
+    output = preview(local, remote)
+    assert f"Only the line endings differ ({description})." in output
+    assert "--- local/" not in output
+
+
+def test_normalized_preview_exposes_real_edits_without_replacing_every_line():
+    local = "".join(f"line {i}\r\n" for i in range(30)).encode()
+    remote = local.replace(b"\r\n", b"\n").replace(b"line 12\n", b"line 12 changed\n")
+    output = preview(local, remote)
+    assert "Line endings differ (CRLF locally, LF on Overleaf)" in output
+    assert "-line 12\n" in output and "+line 12 changed\n" in output
+    assert "-line 0\n" not in output
+    assert "\\r" not in output
+
+
+def test_normalization_preserves_a_missing_final_newline():
+    output = preview(b"same\r\nlast", b"same\nlast\n")
+    assert "Only the line endings differ" not in output
+    assert "\\ No newline at end of file" in output

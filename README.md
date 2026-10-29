@@ -90,6 +90,11 @@ ols [-l | -r] [-n NAME] [-p PATH] [-i OLIGNORE] [--auth-file PATH] [--server URL
 
 On the very first sync there's no history yet, so you're asked about every file that differs between your folder and Overleaf.
 
+At a conflict prompt, choose `d` to view a local-to-remote diff, then answer the prompt again.
+This also works at overwrite prompts with `-l` and `-r`. Previews normalize line endings so text edits stand out;
+if only line endings differ, a short message identifies them instead. This affects only the preview, not file contents
+or sync decisions. Binary or non-UTF-8 files show their sizes instead of a text diff; text previews stop after 200 diff lines.
+
 **One-way sync (`-l`, `-r`).** These use the same history: a file is only overwritten without asking if the other side didn't change it since the last sync. They also handle files deleted on one side: you can delete them on the other side as well, restore them, or ignore them. (Two-way sync never deletes files.)
 
 Example output of a two-way sync:
@@ -163,7 +168,7 @@ The server is stored with the login, so `ols`, `ols list` and `ols download` use
 - Install with `pip install "overleaf-sync[gui]"`; the login window is now an optional extra.
 - Run `ols login` once more: the login file is now stored in a safer format.
 - `--store-path` is now called `--auth-file` (the old name still works for now, and `ols login --path` too).
-- The first two-way sync asks about every file that differs between your folder and Overleaf, because there's no sync history yet. After that, only real conflicts are asked about.
+- The first two-way sync asks about every file that differs between your folder and Overleaf, because there's no sync history yet. Choose `d` at any conflict prompt to inspect the differences, then choose which version to keep or skip the file. Previews appear only when requested. After the first sync, only real conflicts are asked about.
 
 ## Contributing
 
