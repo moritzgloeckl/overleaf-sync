@@ -163,7 +163,8 @@ class OverleafClient(object):
         projects = list(OverleafClient.filter_projects(json_content, {"name": project_name}))
         if len(projects) > 1:
             raise AmbiguousProjectError(
-                f"Multiple active projects are named {project_name!r}. Rename one of them in Overleaf, then try again."
+                f"Multiple active projects are named {project_name!r}. "
+                "Use `ols list` to find their IDs, then select one with `--project-id <id>`."
             )
         return projects[0] if projects else None
 

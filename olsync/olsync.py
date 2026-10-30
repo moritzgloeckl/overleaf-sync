@@ -46,6 +46,13 @@ server_option = click.option(
     "Can also be set with OLSYNC_SERVER.",
 )
 
+project_id_option = click.option(
+    "--project-id",
+    default=None,
+    metavar="ID",
+    help="Select the project by its ID (from ols list or /project/<id> in its URL), bypassing name lookup and --name.",
+)
+
 DEFAULT_AUTH_FILE = ".olauth"
 
 
@@ -110,6 +117,7 @@ def configure_console():
     default="",
     help="Specify the Overleaf project name instead of the default name of the sync directory.",
 )
+@project_id_option
 @auth_file_options("--store-path")
 @click.option(
     "-p", "--path", "sync_path", default=".", type=click.Path(exists=True), help="Path of the project to sync."
@@ -127,7 +135,9 @@ def configure_console():
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.version_option(package_name="overleaf-sync")
 @click.pass_context
-def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_path, olignore_path, server, verbose):
+def main(
+    ctx, local, remote, project_name, project_id, auth_file, legacy_auth_file, sync_path, olignore_path, server, verbose
+):
     """
     Sync an Overleaf project with the current folder (or --path). Without -l/-r, changes on both sides are synced, and
     you're asked before anything that was changed on both sides is overwritten.
@@ -141,7 +151,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
 
         project_name = project_name or os.path.basename(os.getcwd())
         project = execute_action(
-            lambda: overleaf_client.get_project(project_name),
+            lambda: {"id": project_id} if project_id else overleaf_client.get_project(project_name),
             "Querying project",
             "Project queried successfully.",
             "Project could not be queried.",
@@ -279,7 +289,9 @@ def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
         for index, p in enumerate(sorted(overleaf_client.all_projects(), key=lambda x: x["lastUpdated"], reverse=True)):
             if not index:
                 click.echo("\n")
-            click.echo(f"{datetime.fromisoformat(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']}")
+            click.echo(
+                f"{datetime.fromisoformat(p['lastUpdated']).strftime('%m/%d/%Y, %H:%M:%S')} - {p['name']} [{p['id']}]"
+            )
         return True
 
     overleaf_client = load_client(
@@ -298,6 +310,7 @@ def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
 
 
 @main.command(name="download")
+@project_id_option
 @click.option(
     "-n",
     "--name",
@@ -316,14 +329,16 @@ def list_projects(ctx, auth_file, legacy_auth_file, server, verbose):
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
-def download_pdf(ctx, project_name, download_path, auth_file, legacy_auth_file, server, verbose):
+def download_pdf(ctx, project_name, project_id, download_path, auth_file, legacy_auth_file, server, verbose):
     """Compile the project on Overleaf and download the PDF."""
+
+    project_id = project_id or ctx.find_root().params.get("project_id")
 
     def download_project_pdf():
         nonlocal project_name
         project_name = project_name or os.path.basename(os.getcwd())
         project = execute_action(
-            lambda: overleaf_client.get_project(project_name),
+            lambda: {"id": project_id} if project_id else overleaf_client.get_project(project_name),
             "Querying project",
             "Project queried successfully.",
             "Project could not be queried.",

@@ -66,7 +66,7 @@ This doesn't need the `gui` extra.
 ## Syncing
 
 ```
-ols [-l | -r] [-n NAME] [-p PATH] [-i OLIGNORE] [--auth-file PATH] [--server URL] [-v]
+ols [-l | -r] [-n NAME] [--project-id ID] [-p PATH] [-i OLIGNORE] [--auth-file PATH] [--server URL] [-v]
 ```
 
 | Option | Meaning |
@@ -75,6 +75,7 @@ ols [-l | -r] [-n NAME] [-p PATH] [-i OLIGNORE] [--auth-file PATH] [--server URL
 | `-l`, `--local-only` | Only sync local files to Overleaf |
 | `-r`, `--remote-only` | Only sync files from Overleaf to the local folder |
 | `-n`, `--name` | Project name, if it differs from the folder name |
+| `--project-id ID` | Select a project directly by ID, bypassing name lookup and overriding `--name` |
 | `-p`, `--path` | Sync folder, if it isn't the current folder |
 | `-i`, `--olignore` | Path of the [`.olignore`](#excluding-files-olignore) file (default: `.olignore` in the sync folder) |
 | `--auth-file` | Login file (default: `.olauth` in the current folder) |
@@ -89,6 +90,9 @@ ols [-l | -r] [-n NAME] [-p PATH] [-i OLIGNORE] [--auth-file PATH] [--server URL
 - new files on either side are copied to the other side
 
 On the very first sync there's no history yet, so you're asked about every file that differs between your folder and Overleaf.
+
+To select a project by ID, use `ols --project-id ID`. Find the ID with `ols list`, or copy the part after `/project/`
+in the project's Overleaf URL. This also works for shared projects with identical names, without renaming either project.
 
 **One-way sync (`-l`, `-r`).** These use the same history: a file is only overwritten without asking if the other side didn't change it since the last sync. They also handle files deleted on one side: you can delete them on the other side as well, restore them, or ignore them. (Two-way sync never deletes files.)
 
@@ -125,15 +129,17 @@ To exclude a folder, use `folder/*` (not `folder/`). Patterns starting with `./`
 
 ## Other commands
 
-**`ols list`** lists your projects, most recently changed first:
+**`ols list`** lists your projects with their IDs in brackets, most recently changed first:
 
 ```
 $ ols list
-10/24/2026, 13:45:12 - thesis
-09/21/2026, 01:23:45 - Paper draft
+10/24/2026, 13:45:12 - thesis [PROJECT_ID_1]
+09/21/2026, 01:23:45 - Paper draft [PROJECT_ID_2]
 ```
 
-**`ols download`** compiles the project on Overleaf and saves the PDF (`--download-path` to choose the folder, `-n` for the project name).
+**`ols download`** compiles the project on Overleaf and saves the PDF (`--download-path` to choose the folder,
+`-n` for the project name, or `--project-id ID` to bypass name lookup). For example: `ols download --project-id ID`.
+The ID option also works before the command (`ols --project-id ID download`); a command-level ID takes precedence.
 
 ## Self-hosted Overleaf servers
 
@@ -151,7 +157,7 @@ The server is stored with the login, so `ols`, `ols list` and `ols download` use
 - **"… was created by an older version of overleaf-sync"**: the login format changed in 2.0. Run `ols login` again.
 - **"Overleaf's rate limit was reached"**: Overleaf limits how many requests you can make per minute (e.g. project downloads). overleaf-sync already waits and retries; if it still fails, wait a minute.
 - **"Project could not be queried"**: check the project name (`ols list`), or pass it with `-n`.
-- **"Multiple active projects are named …"**: overleaf-sync finds projects by name and won't guess between projects with the same name. Rename one of them in Overleaf (or archive it).
+- **"Multiple active projects are named …"**: run `ols list` to find their IDs, then use `ols --project-id ID` or `ols download --project-id ID` to select one without renaming it.
 - **The login window doesn't open or crashes**: Qt can conflict with other Qt installations (e.g. Anaconda's). Install overleaf-sync in a fresh virtual environment based on a non-conda Python, or use [`ols login --cookie`](#login-without-the-login-window).
 - **`ols: no description file specified`** or other unexpected output: another program called `ols` is on your `PATH`. Use `overleaf-sync` instead.
 - **A change you just made in Overleaf's web editor isn't picked up**: give Overleaf a moment to save it, then sync again.
