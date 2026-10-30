@@ -62,8 +62,10 @@ def test_duplicate_active_project_names_are_rejected(monkeypatch):
         "_extract_projects",
         staticmethod(lambda _: [{"id": "p1", "name": "Paper"}, {"id": "p2", "name": "Paper"}]),
     )
-    with pytest.raises(ValueError, match="Multiple active projects"):
+    with pytest.raises(ValueError, match="Multiple active projects") as exc:
         client.get_project("Paper")
+    assert "ols list" in str(exc.value)
+    assert "--project-id" in str(exc.value)
 
 
 def test_inactive_duplicates_do_not_make_a_project_ambiguous(monkeypatch):
