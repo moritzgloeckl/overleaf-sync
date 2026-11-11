@@ -113,7 +113,7 @@ Syncing files between [local] and [remote]
 
 ### Excluding files (`.olignore`)
 
-Put [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns, one per line, into a file called `.olignore` in the sync folder to keep local files off Overleaf, e.g. build output:
+Put [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) patterns, one per line, into a file called `.olignore` in the sync folder to leave files out of the sync, e.g. build output. Excluded files are left alone on both sides: they are neither uploaded nor downloaded, `-l` and `-r` don't offer to delete them, and their sync history is kept for when you include them again.
 
 ```
 *.aux
@@ -122,6 +122,17 @@ out/*
 ```
 
 To exclude a folder, use `folder/*` (not `folder/`). Patterns starting with `./` work too. Files and folders starting with a dot (like `.olauth`, `.olsync-state.json` or `.git`) are never uploaded.
+
+As in `.gitignore`, a line starting with `!` includes files again that earlier lines exclude, and the last matching line decides. To sync only `main.tex` and the chapters, but not the drafts among them:
+
+```
+*
+!main.tex
+!chapters/*
+chapters/drafts/*
+```
+
+Use `\!` for a file name that starts with `!`.
 
 ## Other commands
 

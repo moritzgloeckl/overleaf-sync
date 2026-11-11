@@ -34,6 +34,6 @@ def test_every_command_and_option_is_described_in_the_help():
 
 
 def test_olignore_help_does_not_claim_it_is_ignored_for_remote_syncs():
-    # .olignore selects the local files in two-way mode and filters the local deletion candidates with -r (#72)
+    # .olignore applies to remote files too (#72)
     help_text = " ".join(CliRunner().invoke(cli.main, ["--help"]).output.split())
     assert "ignored if syncing from remote" not in help_text

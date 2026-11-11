@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `.olignore` lines starting with `!` include files again that earlier lines exclude, as in `.gitignore`; the last
+  matching line decides, and `\!` matches a literal `!`. For example, `*` followed by `!main.tex` syncs only
+  `main.tex` (#72).
+
+### Changed
+
+- `.olignore` applies to files on Overleaf too: excluded files are no longer downloaded (`-r` and two-way sync), and
+  `-l` no longer offers to delete them on Overleaf. Their sync history is kept (#72).
+
 ## [2.0.1] - 2026-10-28
 
 Bug fixes: safer downloads, uploads and sync history, and clearer errors instead of silent failures. Thanks to @lepotatoguy,
@@ -155,6 +168,7 @@ Thanks also to everyone whose earlier pull requests worked on these problems whi
 
 Last release before the 2.0 rework.
 
+[Unreleased]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.1...HEAD
 [2.0.1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/moritzgloeckl/overleaf-sync/compare/aa62165...v2.0.0
 [2.0.0rc1]: https://github.com/moritzgloeckl/overleaf-sync/compare/v2.0.0a4...v2.0.0rc1
