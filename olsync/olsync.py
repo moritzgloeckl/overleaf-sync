@@ -120,8 +120,8 @@ def configure_console():
     "olignore_path",
     default=".olignore",
     type=click.Path(exists=False),
-    help="Path to the .olignore file (relative to the sync path): fnmatch patterns of local files that are never "
-    "uploaded, e.g. `*.log` or `out/*`.",
+    help="Path to the .olignore file (relative to the sync path): fnmatch patterns of files that are never synced, "
+    "in either direction, e.g. `*.log` or `out/*`; `!pattern` includes files again.",
 )
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
@@ -171,13 +171,16 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
         sync = False  # -l and -r below sync in one direction only
         state = load_sync_state(overleaf_client.base_url, project["id"])
         uploaded = {}
+        # Computed once (#60); ignored files are left alone on both sides (#72)
+        local_files = olignore_keep_list(olignore_path)
+        olignore = read_olignore(olignore_path)
+        remote_files = [f for f in zip_file.namelist() if not is_ignored(f, olignore)]
 
         def upload(name):
             uploaded[name] = upload_file(overleaf_client, project, project_infos, name)
 
         if remote:
-            remote_files = zip_file.namelist()
-            deleted_files = [] if sync else [f for f in olignore_keep_list(olignore_path) if f not in remote_files]
+            deleted_files = [] if sync else [f for f in local_files if f not in remote_files]
             written = sync_func(
                 files_from=remote_files,
                 deleted_files=deleted_files,
@@ -195,9 +198,7 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
             )
             record_state(overleaf_client, project, zip_file, state, written["to"], uploaded=uploaded)
         if local:
-            # Computed once (#60)
-            local_files = olignore_keep_list(olignore_path)
-            deleted_files = [] if sync else [f for f in zip_file.namelist() if f not in local_files]
+            deleted_files = [] if sync else [f for f in remote_files if f not in local_files]
             written = sync_func(
                 files_from=local_files,
                 deleted_files=deleted_files,
@@ -536,7 +537,7 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
     """
     Two-way sync that decides per file, based on the state of the last sync (see syncstate.py), instead of the
     project-wide lastUpdated timestamp. Changes on one side are synced; files changed on both sides, or differing
-    without sync history, are only overwritten after asking.
+    without sync history, are only overwritten after asking. Files excluded by .olignore are left alone on both sides.
     """
 
     def read(path):
@@ -544,7 +545,12 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
             return f.read()
 
     server = overleaf_client.base_url
-    remote_content = {name: zip_file.read(name) for name in zip_file.namelist() if not name.endswith("/")}
+    olignore = read_olignore(olignore_path)
+    remote_content = {
+        name: zip_file.read(name)
+        for name in zip_file.namelist()
+        if not name.endswith("/") and not is_ignored(name, olignore)
+    }
     # Local candidates: files allowed by .olignore, plus local copies of remote files (to compare them)
     local_paths = set(olignore_keep_list(olignore_path)) | {name for name in remote_content if os.path.isfile(name)}
     local = {path: syncstate.file_hash(read(path)) for path in local_paths}
@@ -626,6 +632,8 @@ def two_way_sync(overleaf_client, project, project_infos, zip_file, olignore_pat
                 "local": local[path],
                 "remote": remote[path],
             }
+    # Ignored files keep their history, so including them again later doesn't look like a conflict
+    new_state.update({path: entry for path, entry in state.items() if is_ignored(path, olignore)})
     syncstate.save_state(".", server, project["id"], new_state)
 
     click.echo("")
@@ -778,10 +786,21 @@ def execute_action(action, progress_message, success_message, fail_message, verb
         return success
 
 
+def read_olignore(olignore_path):
+    """
+    Read the rules of the .olignore file
+    Params: olignore_path, relative to the sync folder
+    Returns: (negated, pattern) tuples from parse_olignore_line in file order, empty if there is no .olignore file
+    """
+    if not os.path.isfile(olignore_path):
+        return []
+    with open(olignore_path, "r") as f:
+        return [parse_olignore_line(line) for line in f.read().splitlines()]
+
+
 def olignore_keep_list(olignore_path):
     """
-    The list of files to keep synced, with support for sub-folders.
-    Should only be called when syncing from local to remote.
+    The list of local files to keep synced, with support for sub-folders.
     """
     # get list of files recursively (ignore .* files)
     files = glob.glob("**", recursive=True)
@@ -789,17 +808,38 @@ def olignore_keep_list(olignore_path):
     click.echo("=" * 40)
     if not os.path.isfile(olignore_path):
         click.echo("\nNotice: .olignore file does not exist, will sync all items.")
-        keep_list = files
     else:
         click.echo("\n.olignore: using %s to filter items" % olignore_path)
-        with open(olignore_path, "r") as f:
-            # "./main.tex" and "main.tex" mean the same file, matched paths have no "./" prefix (#72)
-            ignore_pattern = [pattern.removeprefix("./") for pattern in f.read().splitlines()]
+    rules = read_olignore(olignore_path)
 
-        keep_list = [f for f in files if not any(fnmatch.fnmatch(f, ignore) for ignore in ignore_pattern)]
+    keep_list = [Path(item).as_posix() for item in files if not os.path.isdir(item)]
+    return [f for f in keep_list if not is_ignored(f, rules)]
 
-    keep_list = [Path(item).as_posix() for item in keep_list if not os.path.isdir(item)]
-    return keep_list
+
+def parse_olignore_line(line):
+    """
+    Parse one line of .olignore as in .gitignore: a leading `!` includes files again that earlier lines exclude, `\\!`
+    stands for a literal `!`
+    Params: line, without line break
+    Returns: (negated, pattern), the pattern without a leading "./" ("./main.tex" and "main.tex" are the same file, #72)
+    """
+    negated = line.startswith("!")
+    if negated or line.startswith("\\!"):
+        line = line[1:]
+    return negated, line.removeprefix("./")
+
+
+def is_ignored(path, rules):
+    """
+    Whether .olignore excludes a file; the last matching pattern decides
+    Params: path, relative to the sync folder; rules, (negated, pattern) tuples from read_olignore
+    Returns: True if the file must not be synced
+    """
+    ignored = False
+    for negated, pattern in rules:
+        if fnmatch.fnmatch(path, pattern):
+            ignored = not negated
+    return ignored
 
 
 if __name__ == "__main__":

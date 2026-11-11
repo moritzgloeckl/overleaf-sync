@@ -138,6 +138,56 @@ def test_olignore_notice_is_printed_once(workdir, mode):
     assert result.output.count(".olignore: using") == 1
 
 
+@pytest.mark.parametrize("mode", [["-r"], []], ids=["remote-only", "two-way"])
+def test_olignore_excludes_remote_files_from_download(workdir, mode):
+    # #72: .olignore applies to both sides
+    (workdir / ".olignore").write_text("*.log\n")
+    FakeClient.remote = {"main.tex": b"x", "notes.log": b"x"}
+    run(*mode)
+    assert (workdir / "main.tex").exists()
+    assert not (workdir / "notes.log").exists()
+
+
+def test_olignore_selects_a_single_file_in_two_way_sync(workdir):
+    (workdir / ".olignore").write_text("*\n!main.tex\n")
+    FakeClient.remote = {"main.tex": b"x", "chapters/intro.tex": b"x"}
+    (workdir / "local.tex").write_bytes(b"x")
+    run()
+    assert (workdir / "main.tex").exists()
+    assert not (workdir / "chapters").exists()
+    assert FakeClient.instances[0].uploaded == []
+
+
+def test_two_way_sync_leaves_ignored_files_that_differ_alone(workdir):
+    (workdir / ".olignore").write_text("*.log\n")
+    FakeClient.remote = {"main.log": b"remote"}
+    (workdir / "main.log").write_bytes(b"local")
+    result = run()
+    assert "Conflict" not in result.output
+    assert (workdir / "main.log").read_bytes() == b"local"
+    assert FakeClient.instances[0].uploaded == []
+
+
+def test_local_only_does_not_offer_to_delete_ignored_remote_files(workdir):
+    (workdir / ".olignore").write_text("*.log\n")
+    FakeClient.remote = {"notes.log": b"x", "gone.tex": b"x"}
+    run("-l", input="d\nd\n")
+    assert FakeClient.instances[0].deleted == ["gone.tex"]
+
+
+def test_sync_history_of_ignored_files_is_kept(workdir):
+    FakeClient.remote = {"main.log": b"v1"}
+    run()
+    (workdir / ".olignore").write_text("*.log\n")
+    run()
+    (workdir / ".olignore").unlink()
+    FakeClient.remote = {"main.log": b"v2"}
+    result = run()
+    # Only the remote side changed since the recorded sync: no conflict
+    assert "Conflict" not in result.output
+    assert (workdir / "main.log").read_bytes() == b"v2"
+
+
 def test_project_name_option_overrides_folder_name(workdir):
     result = run("-r", "-n", "Paper")
     assert result.exit_code == 0

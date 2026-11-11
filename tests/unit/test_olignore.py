@@ -66,3 +66,34 @@ def test_dot_slash_prefix_in_olignore_is_normalised(project):
     assert "main.tex" not in keep
     assert "chapters/deep/a.tex" not in keep
     assert "chapters/intro.tex" in keep
+
+
+def test_negated_pattern_keeps_a_file_an_earlier_pattern_ignores(project):
+    # #72: sync a single file without listing every other file
+    (project / ".olignore").write_text("*\n!main.tex\n")
+    assert olsync.olignore_keep_list(".olignore") == ["main.tex"]
+
+
+def test_last_matching_pattern_wins(project):
+    (project / ".olignore").write_text("chapters/*\n!chapters/*.tex\nchapters/deep/*\n")
+    keep = olsync.olignore_keep_list(".olignore")
+    assert "chapters/intro.tex" in keep
+    assert "chapters/deep/a.tex" not in keep
+
+
+def test_negation_before_the_ignoring_pattern_has_no_effect(project):
+    (project / ".olignore").write_text("!main.tex\n*.tex\n")
+    assert "main.tex" not in olsync.olignore_keep_list(".olignore")
+
+
+def test_negated_pattern_accepts_dot_slash_prefix(project):
+    (project / ".olignore").write_text("*\n!./chapters/intro.tex\n")
+    assert olsync.olignore_keep_list(".olignore") == ["chapters/intro.tex"]
+
+
+def test_escaped_exclamation_mark_matches_a_literal_file_name(project):
+    (project / "!draft.tex").write_text("x")
+    (project / ".olignore").write_text("\\!draft.tex\n")
+    keep = olsync.olignore_keep_list(".olignore")
+    assert "!draft.tex" not in keep
+    assert "main.tex" in keep
