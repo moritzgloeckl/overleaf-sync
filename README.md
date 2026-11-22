@@ -46,12 +46,25 @@ Run `ols` again whenever you want to sync. If the folder name differs from the p
 ## Logging in
 
 ```
-ols login [--auth-file PATH] [--server URL] [--cookie]
+ols login [--auth-file PATH] [--server URL] [--browser [NAME] | --cookie]
 ```
 
 `ols login` opens Overleaf's real login page in a small window. You log in there, as in a browser (including captchas), and your password goes directly to Overleaf. overleaf-sync then stores only the session cookie and the CSRF token in `.olauth` in the current folder. The file is readable only by you and is never synced to Overleaf. Use `--auth-file` to keep it somewhere else; all commands accept the same option.
 
-Keep `.olauth` private: anyone with this file can access your Overleaf account until the session ends. To end it, use *Clear sessions* in your Overleaf account settings (if you logged in with `--cookie`, logging out in that browser works too).
+Keep `.olauth` private: anyone with this file can access your Overleaf account until the session ends. To end it, use *Clear sessions* in your Overleaf account settings (if you logged in with `--browser` or `--cookie`, logging out in that browser works too).
+
+### Login with your browser's session
+
+The login window is a separate browser that doesn't know your normal browser's session, so you have to log in there again, e.g. with your Google account. If you're already logged in to Overleaf in your browser, reuse that session instead:
+
+```
+pip install "overleaf-sync[browser]"
+ols login --browser chrome
+```
+
+Supported browsers: `chrome`, `firefox`, `edge`, `brave`, `chromium`, `vivaldi`, `opera`, `opera_gx`, `arc`, `librewolf` and `safari`. `ols login --browser` without a name tries them in turn and uses the first one that is logged in. overleaf-sync reads only Overleaf's session cookies from the browser (via [browser-cookie3](https://github.com/borisbabic/browser_cookie3)), checks that they work, and stores them in `.olauth` like the login window does. This also works for single sign-on accounts and self-hosted servers (`--server`), and doesn't need the `gui` extra.
+
+Some browsers protect their cookies: on macOS, Chromium-based browsers ask for your Keychain password, and Safari needs *Full Disk Access* for the terminal. Chrome and Edge on Windows encrypt their cookies so that only the browser itself can read them; use Firefox there, or copy the cookie yourself as described below.
 
 ### Login without the login window
 

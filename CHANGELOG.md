@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `ols login --browser [NAME]` logs in with the session of a browser that is already logged in to Overleaf (Chrome,
+  Firefox, Edge, Brave, …), so you don't have to log in again in the login window, e.g. with Google (#130). Needs the
+  new `browser` extra: `pip install "overleaf-sync[browser]"`.
+
 ## [2.0.1] - 2026-10-28
 
 Bug fixes: safer downloads, uploads and sync history, and clearer errors instead of silent failures. Thanks to @lepotatoguy,
