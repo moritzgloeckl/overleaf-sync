@@ -25,16 +25,19 @@ from pathlib import Path
 try:
     # Import for pip installation / wheel
     from olsync.olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
-    from olsync import auth, syncstate
+    from olsync import auth, browsercookies, syncstate
 except ImportError:
     # Import for development
     from olclient import BASE_URL, AmbiguousProjectError, OverleafClient, RateLimitError, SessionExpiredError
     import auth
+    import browsercookies
     import syncstate
 
 # Session cookie names: overleaf.com, and self-hosted servers (Community Edition, "sharelatex.sid" before version 5)
 OVERLEAF_COM_SESSION_COOKIES = ["overleaf_session2"]
 SELF_HOSTED_SESSION_COOKIES = ["overleaf.sid", "sharelatex.sid"]
+# overleaf.com's load balancer cookie, stored with the session like the login window does
+OVERLEAF_COM_LOAD_BALANCER_COOKIE = "GCLB"
 
 server_option = click.option(
     "--server",
@@ -227,11 +230,23 @@ def main(ctx, local, remote, project_name, auth_file, legacy_auth_file, sync_pat
     "at a hidden prompt or read from OLSYNC_COOKIE. Useful on servers without a display and for single "
     "sign-on accounts.",
 )
+@click.option(
+    "--browser",
+    "browser",
+    is_flag=False,
+    flag_value="any",
+    type=click.Choice(["any", *browsercookies.BROWSERS]),
+    help="Log in without the login window, using the session of a browser that is already logged in to Overleaf "
+    "(e.g. with Google or another single sign-on). Only Overleaf's session cookies are read from the browser. "
+    "Without a name, the supported browsers are tried in turn. Needs the `browser` extra.",
+)
 @server_option
 @click.option("-v", "--verbose", "verbose", is_flag=True, help="Enable extended error logging.")
 @click.pass_context
-def login(ctx, auth_file, legacy_auth_file, use_cookie, server, verbose):
+def login(ctx, auth_file, legacy_auth_file, use_cookie, browser, server, verbose):
     """Log in to Overleaf and store the session for the other commands."""
+    if use_cookie and browser:
+        raise click.UsageError("--browser and --cookie can't be combined.")
     server = resolve_login_server(ctx, server)
     cookie_path = resolve_auth_file(ctx, auth_file, legacy_auth_file, "--path")
     if os.path.isfile(cookie_path) and not click.confirm(
@@ -253,6 +268,20 @@ def login(ctx, auth_file, legacy_auth_file, use_cookie, server, verbose):
             "Login failed: the cookie is not valid (expired, or copied incompletely).",
             verbose,
         )
+        return
+    if browser:
+        cookie_names = OVERLEAF_COM_SESSION_COOKIES if server == BASE_URL else SELF_HOSTED_SESSION_COOKIES
+        used_browser = execute_action(
+            lambda: browser_login_handler(browser, cookie_path, server, cookie_names, verbose),
+            "Login",
+            "Login successful. Cookie persisted as `"
+            + click.format_filename(cookie_path)
+            + "`. You may now sync your project.",
+            "Login failed.",
+            verbose,
+        )
+        if browser == "any":
+            click.echo(f"Used the Overleaf session of {used_browser}.")
         return
     olbrowserlogin = load_browser_login()
     click.clear()
@@ -420,6 +449,55 @@ def cookie_login_handler(cookie, path, server, cookie_names):
             auth.save_auth(path, cookies, csrf, server)
             return True
     return False
+
+
+BROWSER_LOGIN_HINT = (
+    "If the browser can't be read (e.g. Chrome on Windows, which encrypts its cookies for Chrome only), log in "
+    "with Firefox, or copy the session cookie yourself: ols login --cookie"
+)
+
+
+def browser_login_handler(browser, path, server, cookie_names, verbose=False):
+    """
+    Store the Overleaf session of a browser that is logged in. Each candidate session is validated by fetching the
+    CSRF token, so an expired session in one browser doesn't stop the search.
+    Params: browser (a name from browsercookies.BROWSERS, or "any" to try them all), path (auth file), server,
+            cookie_names (session cookie names of the server, in the order to try), verbose (also list the
+            browsers that could not be read when trying them all; most of them are usually not installed)
+    Returns: the name of the browser whose session was stored; raises a ClickException otherwise
+    """
+    candidates = browsercookies.BROWSERS if browser == "any" else [browser]
+    extra_cookies = [OVERLEAF_COM_LOAD_BALANCER_COOKIE] if server == BASE_URL else []
+    problems = []
+    for name in candidates:
+        try:
+            cookies = browsercookies.read_session_cookies(name, server, cookie_names + extra_cookies)
+        except browsercookies.MissingLibraryError as e:
+            raise click.ClickException(str(e))
+        except browsercookies.BrowserReadError as e:
+            if browser != "any" or verbose:
+                problems.append(f"{name} could not be read: {e}")
+            continue
+        sessions = [cookie_name for cookie_name in cookie_names if cookie_name in cookies]
+        if not sessions:
+            if browser != "any":
+                problems.append(f"No Overleaf session found in {name}. Log in to {server} in {name} first.")
+            continue
+        for session_name in sessions:
+            login_cookies = {session_name: cookies[session_name]}
+            login_cookies.update({extra: cookies[extra] for extra in extra_cookies if extra in cookies})
+            csrf = OverleafClient(login_cookies, base_url=server).fetch_csrf()
+            if csrf is not None:
+                auth.save_auth(path, login_cookies, csrf, server)
+                return name
+        problems.append(f"{name} is not logged in to {server} any more (its session has expired). Log in there again.")
+    if browser == "any":
+        problems.insert(
+            0,
+            f"No Overleaf session found in any supported browser. Log in to {server} in your browser, or name the "
+            "browser to see why it can't be used, e.g. ols login --browser chrome",
+        )
+    raise click.ClickException("\n".join(problems + [BROWSER_LOGIN_HINT]))
 
 
 def delete_file(path):

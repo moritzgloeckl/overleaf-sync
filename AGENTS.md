@@ -16,6 +16,7 @@ olsync/
   realtime.py         # project file tree from Overleaf's real-time service (Socket.IO 0.9 over xhr-polling)
   syncstate.py        # per-file sync state (.olsync-state.json) and the two-way decision table
   auth.py             # the persisted login (.olauth, JSON)
+  browsercookies.py   # reads the session cookies from an installed browser for `ols login --browser` (optional `browser` extra)
   olbrowserlogin.py   # PySide6 (Qt WebEngine) login window used by `ols login` (optional `gui` extra)
 tests/
   unit/               # default `pytest` run, no network
@@ -36,7 +37,7 @@ Lint and format with `ruff check .` and `ruff format .` (both enforced in CI; li
 
 ## How it works
 
-- **Login** (`olbrowserlogin.py`, `olsync.login`): the Qt window opens `<server>/login`; once it reaches `<server>/project` it takes the session cookies (`overleaf_session2` + `GCLB` on overleaf.com, `overleaf.sid` / `sharelatex.sid` on self-hosted servers) and the CSRF token. `ols login --cookie` instead takes the cookie from a hidden prompt or `OLSYNC_COOKIE` (never a CLI argument) and fetches the CSRF token; on self-hosted servers it tries `overleaf.sid`, then `sharelatex.sid`. Passwords are never handled.
+- **Login** (`olbrowserlogin.py`, `olsync.login`): the Qt window opens `<server>/login`; once it reaches `<server>/project` it takes the session cookies (`overleaf_session2` + `GCLB` on overleaf.com, `overleaf.sid` / `sharelatex.sid` on self-hosted servers) and the CSRF token. `ols login --cookie` instead takes the cookie from a hidden prompt or `OLSYNC_COOKIE` (never a CLI argument) and fetches the CSRF token; on self-hosted servers it tries `overleaf.sid`, then `sharelatex.sid`. `ols login --browser [NAME]` reads the same cookies (plus `GCLB`) of the server's host from a browser's cookie store via browser-cookie3 (imported only there), validates each candidate session with the CSRF fetch and stores the first valid one; without a name it tries `browsercookies.BROWSERS` in turn. Passwords are never handled.
 - **Auth file** (`auth.py`): JSON `{"version": 2, "server": ..., "cookies": {...}, "csrf": ...}` in `.olauth` (`--auth-file`), written atomically with mode 0600. Pickle files from 2.0.0a4 and earlier are recognised by their first byte and **never unpickled**; the user is asked to log in again.
 - **Server**: `load_client` resolves it as `--server`/`OLSYNC_SERVER` > stored server > overleaf.com.
 - **Client** (`olclient.py`):
@@ -55,7 +56,7 @@ Lint and format with `ruff check .` and `ruff format .` (both enforced in CI; li
 
 - Keep paths POSIX-style (`/`) when talking to Overleaf, also on Windows (`PATH_SEP`, `Path(...).as_posix()`). Several past fixes were Windows path bugs.
 - Modules import each other with a try/except fallback, so they run both installed (`olsync.x`) and from inside `olsync/` (`x`). Keep both working when adding modules.
-- PySide6 is optional and only imported by `ols login` (`load_browser_login`); keep it out of module-level imports.
+- PySide6 is optional and only imported by `ols login` (`load_browser_login`); keep it out of module-level imports. The same goes for browser-cookie3 (`browsercookies.read_session_cookies`).
 - Match the existing style: plain functions and lambdas, docstrings with `Params:` / `Returns:` sections, `click.echo` for user output.
 - The auth file option is `--auth-file` on every command (`auth_file_options` / `resolve_auth_file`, which also honour `ols --auth-file X <command>`). The pre-2.0 names (`--store-path`, and `--path` on `login`) are hidden aliases with a deprecation warning. `-p/--path` on sync means the sync directory. `--server` follows the same pattern (`server_option`).
 - User-facing behaviour is documented in `README.md`, changes in `CHANGELOG.md` (`[Unreleased]`); update both when you change behaviour or options.
